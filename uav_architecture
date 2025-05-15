@@ -1,0 +1,16 @@
+// UAV Architecture
+digraph {
+	A [label="Полетный контроллер"]
+	B [label="Камера"]
+	C [label=GPS]
+	D [label="Радиосвязь"]
+	E [label="Бортовой компьютер"]
+	F [label="Сенсоры"]
+	G [label="Оружейный модуль"]
+	A -> E
+	B -> E
+	C -> E
+	D -> E
+	F -> E
+	E -> G [label="Команда"]
+}

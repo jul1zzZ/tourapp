@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1032567927145",
+    "project_id": "tour-5c367",
+    "storage_bucket": "tour-5c367.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1032567927145:android:4a92378b71e4dcf4e80df8",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1032567927145-2najn5lqgt7mnj4a92ihejatm1pcpblo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJq_LCHr7mKIP7n3OWr1RWqwnupH0Mmsk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1032567927145-2najn5lqgt7mnj4a92ihejatm1pcpblo.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
