@@ -17,6 +17,7 @@ class TourDetailsScreen extends StatefulWidget {
 class _TourDetailsScreenState extends State<TourDetailsScreen> {
   List<Marker> _placeMarkers = [];
   late MapController _mapController;
+  String? visaInfo;
 
   @override
   void initState() {
@@ -64,6 +65,48 @@ class _TourDetailsScreenState extends State<TourDetailsScreen> {
     }
   }
 
+  Future<void> _loadVisaInfo() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('VisaRequirements')
+        .doc(widget.tour.destination)
+        .get();
+
+    if (doc.exists) {
+      final data = doc.data();
+      setState(() {
+        visaInfo = data?['info'];
+      });
+
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('Визовая информация'),
+          content: Text(visaInfo ?? 'Нет данных.'),
+          actions: [
+            TextButton(
+              child: Text('Закрыть'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('Визовая информация'),
+          content: Text('Нет информации о визе для этого направления.'),
+          actions: [
+            TextButton(
+              child: Text('Ок'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -98,8 +141,8 @@ class _TourDetailsScreenState extends State<TourDetailsScreen> {
                   options: MapOptions(
                     initialCenter: _placeMarkers.isNotEmpty
                         ? _placeMarkers.first.point
-                        : LatLng(30.0444, 31.2357), // Default center if no markers
-                    initialZoom: 12.0, // Adjust the zoom level
+                        : LatLng(30.0444, 31.2357),
+                    initialZoom: 12.0,
                   ),
                   children: [
                     TileLayer(
@@ -113,6 +156,11 @@ class _TourDetailsScreenState extends State<TourDetailsScreen> {
                 ),
               ),
               SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _loadVisaInfo,
+                child: Text('Информация о визе'),
+              ),
+              SizedBox(height: 10),
               ElevatedButton(
                 onPressed: () {
                   Navigator.push(
