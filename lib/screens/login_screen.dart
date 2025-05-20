@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'register_screen.dart';
 import 'password_recovery_screen.dart';
@@ -19,6 +20,34 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    requestNotificationPermission();
+  }
+
+  Future<void> requestNotificationPermission() async {
+    // Запрос разрешений на уведомления (важно для iOS)
+    await FirebaseMessaging.instance.requestPermission();
+  }
+
+  Future<void> saveUserFCMToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'fcmToken': token,
+        });
+        print('FCM Token сохранён: $token');
+      }
+    } catch (e) {
+      print('Ошибка при сохранении FCM Token: $e');
+    }
+  }
+
   Future<void> _loginUser() async {
     setState(() {
       _errorMessage = null;
@@ -34,20 +63,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      // Firebase Auth login
-      UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-              email: _emailController.text.trim(),
-              password: _passwordController.text.trim());
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
       User? user = userCredential.user;
 
       if (user != null) {
-        // Получаем роль из Firestore
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
         if (!userDoc.exists) {
           throw Exception('Пользователь не найден в базе данных.');
@@ -55,18 +79,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final role = userDoc.get('role');
 
+        await saveUserFCMToken();
+
         if (role == 'admin') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => AdminDashboardScreen()),
-          );
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AdminDashboardScreen()));
         } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-            builder: (context) => BottomNavbar(isAdmin: false),
-            )
-          );
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => BottomNavbar(isAdmin: false)));
         }
       }
     } on FirebaseAuthException catch (e) {
