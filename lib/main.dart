@@ -10,6 +10,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print('Сообщение в фоне: ${message.messageId}');
 }
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -82,6 +83,7 @@ class _MyAppState extends State<MyApp> {
       print('Пользователь отказался от уведомлений');
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

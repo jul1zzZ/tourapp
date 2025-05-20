@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-
 class Tour {
+  final String id;          // <- Добавляем id
   final String destination;
   final double price;
   final String tourType;
@@ -11,6 +11,7 @@ class Tour {
   final String description;
 
   Tour({
+    required this.id,
     required this.destination,
     required this.price,
     required this.tourType,
@@ -20,8 +21,10 @@ class Tour {
     required this.description,
   });
 
-  factory Tour.fromFirestore(Map<String, dynamic> data) {
+  factory Tour.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
     return Tour(
+      id: doc.id,   // <- получаем id документа
       destination: data['destination'] ?? '',
       price: (data['price'] ?? 0).toDouble(),
       tourType: data['tourType'] ?? '',

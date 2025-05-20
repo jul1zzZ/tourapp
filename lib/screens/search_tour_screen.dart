@@ -37,8 +37,8 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
       var snapshot = await FirebaseFirestore.instance.collection('Tours').get();
 
       final loadedTours = snapshot.docs
-          .map((doc) => Tour.fromFirestore(doc.data() as Map<String, dynamic>))
-          .toList();
+      .map((doc) => Tour.fromFirestore(doc)) // Передаем doc, а не doc.data()
+      .toList();
 
       final types = loadedTours.map((t) => t.tourType).toSet().toList();
       types.sort();

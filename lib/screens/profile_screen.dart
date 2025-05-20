@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
 
 class UserProfileScreen extends StatefulWidget {
   @override
@@ -11,18 +10,20 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final userId = FirebaseAuth.instance.currentUser!.uid;
+  final String userId = FirebaseAuth.instance.currentUser!.uid;
 
   Map<String, dynamic>? userInfo;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> tourBookings = [];
   List<QueryDocumentSnapshot<Map<String, dynamic>>> hotelBookings = [];
+  Map<String, int> favoriteToursCount = {};
+  List<String> topTourIds = [];
 
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _fetchUserData();
   }
 
@@ -40,116 +41,46 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
           .where('userId', isEqualTo: userId)
           .get();
 
+      final Map<String, int> counts = {};
+      for (var doc in toursSnapshot.docs) {
+        final tourId = doc['tourId'];
+        if (tourId != null) {
+          counts[tourId] = (counts[tourId] ?? 0) + 1;
+        }
+      }
+
+      final sortedTours = counts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
       setState(() {
         userInfo = userDoc.data();
         tourBookings = toursSnapshot.docs;
         hotelBookings = hotelsSnapshot.docs;
+        favoriteToursCount = counts;
+        topTourIds = sortedTours.take(3).map((e) => e.key).toList();
         isLoading = false;
       });
     } catch (e) {
-      print('Ошибка при загрузке профиля: $e');
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _editBooking({
-    required String docId,
-    required String collection,
-    required int currentPeople,
-    required Timestamp currentDate,
-  }) async {
-    final peopleController = TextEditingController(text: currentPeople.toString());
-    Timestamp updatedDate = currentDate;
-
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Редактировать бронирование'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: peopleController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: 'Количество людей'),
-            ),
-            SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () async {
-                final pickedDate = await DatePicker.showDateTimePicker(
-                  context,
-                  showTitleActions: true,
-                  minTime: DateTime.now(),
-                  currentTime: currentDate.toDate(),
-                );
-                if (pickedDate != null) {
-                  updatedDate = Timestamp.fromDate(pickedDate);
-                }
-              },
-              child: Text('Изменить дату'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Отмена')),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await FirebaseFirestore.instance.collection(collection).doc(docId).update({
-                  'numberOfPeople': int.tryParse(peopleController.text) ?? currentPeople,
-                  'timestamp': updatedDate,
-                });
-                Navigator.pop(context);
-                _fetchUserData();
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Бронирование обновлено')));
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-              }
-            },
-            child: Text('Сохранить'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _cancelBooking(String docId, String collection) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Отмена бронирования'),
-        content: Text('Вы уверены, что хотите отменить бронирование?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Нет')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text('Да')),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        await FirebaseFirestore.instance.collection(collection).doc(docId).delete();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Бронирование отменено')));
-        _fetchUserData();
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка при отмене: $e')));
-      }
+      print('Ошибка при загрузке данных: $e');
+      setState(() => isLoading = false);
     }
   }
 
   Widget _buildUserInfo() {
-    if (userInfo == null) return Text('Не удалось загрузить данные пользователя');
-    return Padding(
+    if (userInfo == null) return Center(child: Text('Не удалось загрузить данные пользователя'));
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Имя: ${userInfo!['name'] ?? '-'}', style: TextStyle(fontSize: 18)),
+          SizedBox(height: 8),
           Text('Email: ${userInfo!['email'] ?? '-'}', style: TextStyle(fontSize: 18)),
+          SizedBox(height: 8),
           Text('Телефон: ${userInfo!['phone'] ?? '-'}', style: TextStyle(fontSize: 18)),
+          SizedBox(height: 8),
           Text('Язык: ${userInfo!['language'] ?? '-'}', style: TextStyle(fontSize: 18)),
+          SizedBox(height: 8),
           Text('Последний вход: ${_formatTimestamp(userInfo!['lastLogin'])}', style: TextStyle(fontSize: 18)),
         ],
       ),
@@ -158,42 +89,39 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
 
   Widget _buildTourBookings() {
     if (tourBookings.isEmpty) return Center(child: Text('Нет бронирований туров'));
+
     return ListView.builder(
       itemCount: tourBookings.length,
       itemBuilder: (context, index) {
         final doc = tourBookings[index];
         final booking = doc.data();
-        final timestampValue = booking['date'] ?? booking['timestamp'];
+        final timestamp = booking['date'] ?? booking['timestamp'];
         final status = booking['status'] ?? 'Ожидает';
 
         return Card(
           margin: EdgeInsets.all(8),
           child: ListTile(
-            leading: Icon(Icons.card_travel),
+            leading: Icon(Icons.flight),
             title: Text('Тур: ${booking['tourId'] ?? 'Неизвестно'}'),
             subtitle: Text(
-              'Дата: ${_formatTimestamp(timestampValue)}\n'
-              'Людей: ${booking['numberOfPeople'] ?? '-'}\n'
-              'Сумма: \$${booking['totalPrice'] ?? '-'}\n'
+              'Дата: ${_formatTimestamp(timestamp)}\n'
+              'Людей: ${booking['numberOfPeople']}\n'
+              'Сумма: ${booking['totalPrice']} ₽\n'
               'Статус: $status',
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.edit, color: Colors.orange),
-                  onPressed: () => _editBooking(
-                    docId: doc.id,
-                    collection: 'Bookings',
-                    currentPeople: booking['numberOfPeople'] ?? 1,
-                    currentDate: booking['timestamp'] ?? Timestamp.now(),
+            trailing: ElevatedButton(
+              child: Text('Оставить отзыв'),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddReviewScreen(
+                      tourId: booking['tourId'],
+                      bookingId: doc.id,
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _cancelBooking(doc.id, 'Bookings'),
-                ),
-              ],
+                );
+              },
             ),
           ),
         );
@@ -203,6 +131,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
 
   Widget _buildHotelBookings() {
     if (hotelBookings.isEmpty) return Center(child: Text('Нет бронирований отелей'));
+
     return ListView.builder(
       itemCount: hotelBookings.length,
       itemBuilder: (context, index) {
@@ -219,25 +148,51 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
               'Дата: ${_formatTimestamp(booking['timestamp'])}\n'
               'Статус: $status',
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.edit, color: Colors.orange),
-                  onPressed: () => _editBooking(
-                    docId: doc.id,
-                    collection: 'hotel_booking',
-                    currentPeople: booking['numberOfPeople'] ?? 1,
-                    currentDate: booking['timestamp'] ?? Timestamp.now(),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _cancelBooking(doc.id, 'hotel_booking'),
-                ),
-              ],
-            ),
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFavoriteTours() {
+    if (topTourIds.isEmpty) return Center(child: Text('Нет любимых туров'));
+
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('Tours')
+          .where('destination', whereIn: topTourIds)
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(child: Text('Не удалось загрузить туры'));
+        }
+
+        final tours = snapshot.data!.docs;
+
+        return ListView.builder(
+          itemCount: tours.length,
+          itemBuilder: (context, index) {
+            final tour = tours[index].data() as Map<String, dynamic>;
+            final tourName = tour['destination'] ?? '—';
+
+            return Card(
+              margin: EdgeInsets.all(8),
+              child: ListTile(
+                leading: Icon(Icons.favorite, color: Colors.red),
+                title: Text('${tour['city']} → $tourName'),
+                subtitle: Text(
+                  'Отель: ${tour['hotel']}\n'
+                  'Цена: ${tour['price']} ₽\n'
+                  'Рейтинг: ${tour['rating'] ?? '-'} ★\n'
+                  'Бронирований: ${favoriteToursCount[tourName] ?? 0} раз',
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -248,7 +203,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
     try {
       final date = (timestamp as Timestamp).toDate();
       return DateFormat('dd.MM.yyyy HH:mm').format(date);
-    } catch (e) {
+    } catch (_) {
       return '-';
     }
   }
@@ -263,13 +218,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Профиль'),
+        title: Text('Профиль пользователя'),
         bottom: TabBar(
           controller: _tabController,
           tabs: [
             Tab(text: 'Инфо'),
             Tab(text: 'Туры'),
             Tab(text: 'Отели'),
+            Tab(text: 'Любимые'),
           ],
         ),
       ),
@@ -281,8 +237,122 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                 _buildUserInfo(),
                 _buildTourBookings(),
                 _buildHotelBookings(),
+                _buildFavoriteTours(),
               ],
             ),
+    );
+  }
+}
+
+/// Экран добавления отзыва
+class AddReviewScreen extends StatefulWidget {
+  final String tourId;
+  final String bookingId;
+
+  AddReviewScreen({required this.tourId, required this.bookingId});
+
+  @override
+  _AddReviewScreenState createState() => _AddReviewScreenState();
+}
+
+class _AddReviewScreenState extends State<AddReviewScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _reviewController = TextEditingController();
+  double _rating = 3;
+  bool _isSubmitting = false;
+
+  Future<void> _submitReview() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+
+    try {
+      await FirebaseFirestore.instance.collection('reviews').add({
+        'tourId': widget.tourId,
+        'bookingId': widget.bookingId,
+        'userId': userId,
+        'rating': _rating,
+        'review': _reviewController.text.trim(),
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Отзыв успешно добавлен')),
+      );
+
+      Navigator.of(context).pop();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка при добавлении отзыва: $e')),
+      );
+    } finally {
+      setState(() {
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _reviewController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Добавить отзыв'),
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              Text('Оцените тур:', style: TextStyle(fontSize: 16)),
+              Slider(
+                min: 1,
+                max: 5,
+                divisions: 4,
+                label: _rating.toStringAsFixed(1),
+                value: _rating,
+                onChanged: (val) {
+                  setState(() {
+                    _rating = val;
+                  });
+                },
+              ),
+              SizedBox(height: 16),
+              TextFormField(
+                controller: _reviewController,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  labelText: 'Ваш отзыв',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Пожалуйста, введите отзыв';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 20),
+              _isSubmitting
+                  ? CircularProgressIndicator()
+                  : ElevatedButton(
+                      onPressed: _submitReview,
+                      child: Text('Отправить отзыв'),
+                    ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
