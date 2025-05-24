@@ -37,20 +37,52 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
       var snapshot = await FirebaseFirestore.instance.collection('Tours').get();
 
       final loadedTours = snapshot.docs
-      .map((doc) => Tour.fromFirestore(doc)) // Передаем doc, а не doc.data()
-      .toList();
+          .map((doc) => Tour.fromFirestore(doc))
+          .toList();
 
-      final types = loadedTours.map((t) => t.tourType).toSet().toList();
+      final tourIds = snapshot.docs.map((doc) => doc.id).toList();
+
+      // Получаем отзывы для этих туров
+      var reviewsSnapshot = await FirebaseFirestore.instance
+          .collection('reviews')
+          .where('tourId', whereIn: tourIds)
+          .get();
+
+      // Группируем рейтинги по tourId
+      Map<String, List<double>> ratingsMap = {};
+      for (var reviewDoc in reviewsSnapshot.docs) {
+        var data = reviewDoc.data();
+        String tid = data['tourId'];
+        double rating = (data['rating'] ?? 0).toDouble();
+
+        ratingsMap.putIfAbsent(tid, () => []);
+        ratingsMap[tid]!.add(rating);
+      }
+
+      // Считаем средний рейтинг для каждого тура
+      Map<String, double> toursAvgRatings = {};
+      ratingsMap.forEach((key, ratings) {
+        double avg = ratings.reduce((a, b) => a + b) / ratings.length;
+        toursAvgRatings[key] = avg;
+      });
+
+      // Обновляем объекты Tour с вычисленным рейтингом
+      List<Tour> updatedTours = loadedTours.map((tour) {
+        double? avgRating = toursAvgRatings[tour.id];
+        return tour.copyWith(rating: avgRating ?? tour.rating);
+      }).toList();
+
+      final types = updatedTours.map((t) => t.tourType).toSet().toList();
       types.sort();
       types.insert(0, 'Все');
 
-      final prices = loadedTours.map((t) => t.price);
+      final prices = updatedTours.map((t) => t.price);
       final minP = prices.reduce((a, b) => a < b ? a : b);
       final maxP = prices.reduce((a, b) => a > b ? a : b);
 
       setState(() {
-        tours = loadedTours;
-        filteredTours = loadedTours;
+        tours = updatedTours;
+        filteredTours = updatedTours;
         tourTypes = types;
         minPrice = selectedMinPrice = minP;
         maxPrice = selectedMaxPrice = maxP;
@@ -64,25 +96,17 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
     setState(() {
       filteredTours = tours.where((tour) {
         final matchesDestination = _destinationController.text.isEmpty ||
-            tour.destination
-                .toLowerCase()
-                .contains(_destinationController.text.toLowerCase());
+            tour.destination.toLowerCase().contains(_destinationController.text.toLowerCase());
 
         final matchesType = selectedType == 'Все' || tour.tourType == selectedType;
 
-        final matchesDate = selectedStartDate == null ||
-            tour.startDate.isAfter(selectedStartDate!);
+        final matchesDate = selectedStartDate == null || tour.startDate.isAfter(selectedStartDate!);
 
-        final matchesPrice = tour.price >= selectedMinPrice &&
-            tour.price <= selectedMaxPrice;
+        final matchesPrice = tour.price >= selectedMinPrice && tour.price <= selectedMaxPrice;
 
         final matchesRating = tour.rating >= selectedMinRating;
 
-        return matchesDestination &&
-            matchesType &&
-            matchesDate &&
-            matchesPrice &&
-            matchesRating;
+        return matchesDestination && matchesType && matchesDate && matchesPrice && matchesRating;
       }).toList();
     });
   }
@@ -161,7 +185,7 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Цена: от ${selectedMinPrice.toInt()} до ${selectedMaxPrice.toInt()} USD'),
+                Text('Цена: от ${selectedMinPrice.toInt()} до ${selectedMaxPrice.toInt()} руб.'),
                 RangeSlider(
                   min: minPrice,
                   max: maxPrice,
@@ -204,7 +228,7 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
                         final tour = filteredTours[index];
                         return ListTile(
                           title: Text(tour.destination),
-                          subtitle: Text('${tour.price} USD • Рейтинг: ${tour.rating}'),
+                          subtitle: Text('${tour.price} руб.\nРейтинг: ${tour.rating.toStringAsFixed(1)} ★'),
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(

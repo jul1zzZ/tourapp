@@ -154,13 +154,10 @@ class _BookTourScreenState extends State<BookTourScreen> {
       'timestamp': Timestamp.now(),
     });
 
-    // Показать сообщение об успехе
     _showSuccessMessage('Бронирование успешно!');
 
-    // Подождать немного, чтобы пользователь увидел сообщение
     await Future.delayed(Duration(seconds: 1));
 
-    // Перейти на главный экран (замени на свой, если другой)
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => SearchToursScreen()),

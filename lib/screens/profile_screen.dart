@@ -88,46 +88,61 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   }
 
   Widget _buildTourBookings() {
-    if (tourBookings.isEmpty) return Center(child: Text('Нет бронирований туров'));
+  if (tourBookings.isEmpty) return Center(child: Text('Нет бронирований туров'));
 
-    return ListView.builder(
-      itemCount: tourBookings.length,
-      itemBuilder: (context, index) {
-        final doc = tourBookings[index];
-        final booking = doc.data();
-        final timestamp = booking['date'] ?? booking['timestamp'];
-        final status = booking['status'] ?? 'Ожидает';
+  return ListView.builder(
+    itemCount: tourBookings.length,
+    itemBuilder: (context, index) {
+      final doc = tourBookings[index];
+      final booking = doc.data();
+      final timestamp = booking['date'] ?? booking['timestamp'];
+      final status = booking['status'] ?? 'Ожидает';
 
-        return Card(
-          margin: EdgeInsets.all(8),
-          child: ListTile(
-            leading: Icon(Icons.flight),
-            title: Text('Тур: ${booking['tourId'] ?? 'Неизвестно'}'),
-            subtitle: Text(
-              'Дата: ${_formatTimestamp(timestamp)}\n'
-              'Людей: ${booking['numberOfPeople']}\n'
-              'Сумма: ${booking['totalPrice']} ₽\n'
-              'Статус: $status',
-            ),
-            trailing: ElevatedButton(
-              child: Text('Оставить отзыв'),
-              onPressed: () {
+      return Card(
+        margin: EdgeInsets.all(8),
+        child: ListTile(
+          leading: Icon(Icons.flight),
+          title: Text('Тур: ${booking['tourId'] ?? 'Неизвестно'}'),
+          subtitle: Text(
+            'Дата: ${_formatTimestamp(timestamp)}\n'
+            'Людей: ${booking['numberOfPeople'] ?? '-'}\n'
+            'Сумма: ${booking['totalPrice'] ?? '-'} ₽\n'
+            'Статус: $status',
+          ),
+          trailing: ElevatedButton(
+            child: Text('Оставить отзыв'),
+            onPressed: () async {
+              // Ищем реальный документ тура по полю destination
+              final toursSnapshot = await FirebaseFirestore.instance
+                  .collection('Tours')
+                  .where('destination', isEqualTo: booking['tourId'])
+                  .limit(1)
+                  .get();
+
+              if (toursSnapshot.docs.isNotEmpty) {
+                final realTourId = toursSnapshot.docs.first.id;
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => AddReviewScreen(
-                      tourId: booking['tourId'],
+                      tourId: realTourId,
                       bookingId: doc.id,
                     ),
                   ),
                 );
-              },
-            ),
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Тур не найден')),
+                );
+              }
+            },
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
+
 
   Widget _buildHotelBookings() {
     if (hotelBookings.isEmpty) return Center(child: Text('Нет бронирований отелей'));
@@ -154,49 +169,74 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
     );
   }
 
-  Widget _buildFavoriteTours() {
-    if (topTourIds.isEmpty) return Center(child: Text('Нет любимых туров'));
+ Widget _buildFavoriteTours() {
+  if (topTourIds.isEmpty) return Center(child: Text('Нет любимых туров'));
 
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('Tours')
-          .where('destination', whereIn: topTourIds)
-          .get(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
-        }
+  return FutureBuilder<QuerySnapshot>(
+    future: FirebaseFirestore.instance
+        .collection('Tours')
+        .where('destination', whereIn: topTourIds)
+        .get(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return Center(child: CircularProgressIndicator());
+      }
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(child: Text('Не удалось загрузить туры'));
-        }
+      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        return Center(child: Text('Не удалось загрузить туры'));
+      }
 
-        final tours = snapshot.data!.docs;
+      final tours = snapshot.data!.docs;
 
-        return ListView.builder(
-          itemCount: tours.length,
-          itemBuilder: (context, index) {
-            final tour = tours[index].data() as Map<String, dynamic>;
-            final tourName = tour['destination'] ?? '—';
+      return ListView.builder(
+        itemCount: tours.length,
+        itemBuilder: (context, index) {
+          final tourDoc = tours[index];
+          final tour = tourDoc.data() as Map<String, dynamic>;
+          final tourName = tour['destination'] ?? '—';
 
-            return Card(
-              margin: EdgeInsets.all(8),
-              child: ListTile(
-                leading: Icon(Icons.favorite, color: Colors.red),
-                title: Text('${tour['city']} → $tourName'),
-                subtitle: Text(
-                  'Отель: ${tour['hotel']}\n'
-                  'Цена: ${tour['price']} ₽\n'
-                  'Рейтинг: ${tour['rating'] ?? '-'} ★\n'
-                  'Бронирований: ${favoriteToursCount[tourName] ?? 0} раз',
+          return FutureBuilder<QuerySnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('reviews')
+                .where('tourId', isEqualTo: tourDoc.id)
+                .get(),
+            builder: (context, reviewSnapshot) {
+              if (reviewSnapshot.connectionState == ConnectionState.waiting) {
+                return ListTile(
+                  title: Text('${tour['city']} → $tourName'),
+                  subtitle: Text('Загрузка рейтинга...'),
+                );
+              }
+
+              double avgRating = 0;
+              if (reviewSnapshot.hasData && reviewSnapshot.data!.docs.isNotEmpty) {
+                final ratings = reviewSnapshot.data!.docs
+                    .map((doc) => (doc.data() as Map<String, dynamic>)['rating']?.toDouble() ?? 0)
+                    .toList();
+                avgRating = ratings.reduce((a, b) => a + b) / ratings.length;
+              }
+
+              return Card(
+                margin: EdgeInsets.all(8),
+                child: ListTile(
+                  leading: Icon(Icons.favorite, color: Colors.red),
+                  title: Text('${tour['city']} → $tourName'),
+                  subtitle: Text(
+                    'Отель: ${tour['hotel']}\n'
+                    'Цена: ${tour['price']} ₽\n'
+                    'Рейтинг: ${avgRating > 0 ? avgRating.toStringAsFixed(1) : '-'} ★\n'
+                    'Бронирований: ${favoriteToursCount[tourName] ?? 0} раз',
+                  ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+              );
+            },
+          );
+        },
+      );
+    },
+  );
+}
+
 
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return '-';
@@ -244,7 +284,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   }
 }
 
-/// Экран добавления отзыва
 class AddReviewScreen extends StatefulWidget {
   final String tourId;
   final String bookingId;

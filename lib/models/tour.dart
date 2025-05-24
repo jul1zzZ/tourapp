@@ -34,4 +34,26 @@ class Tour {
       description: data['description'] ?? '',
     );
   }
+
+  Tour copyWith({
+    String? id,
+    String? destination,
+    double? price,
+    String? tourType,
+    DateTime? startDate,
+    DateTime? endDate,
+    double? rating,
+    String? description,
+  }) {
+    return Tour(
+      id: id ?? this.id,
+      destination: destination ?? this.destination,
+      price: price ?? this.price,
+      tourType: tourType ?? this.tourType,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      rating: rating ?? this.rating,
+      description: description ?? this.description,
+    );
+  }
 }

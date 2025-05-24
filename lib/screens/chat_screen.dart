@@ -37,7 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'lastMessage': '',
         'lastMessageTime': FieldValue.serverTimestamp(),
-        'participants': ['support', widget.currentUserId], // на будущее
+        'participants': ['support', widget.currentUserId], 
       });
     }
 

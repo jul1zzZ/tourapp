@@ -22,7 +22,6 @@ class _HotelBookingScreenState extends State<HotelBookingScreen> {
 
   bool _isLoading = false;
 
-  // Сохраняем FCM токен пользователя в Firestore (если не сохранен)
   Future<void> _saveUserFCMToken() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -130,7 +129,6 @@ class _HotelBookingScreenState extends State<HotelBookingScreen> {
       setState(() {
         if (isCheckIn) {
           checkInDate = picked;
-          // Если дата выезда раньше заезда — сбрасываем ее
           if (checkOutDate != null && !checkOutDate!.isAfter(checkInDate!)) {
             checkOutDate = null;
           }
