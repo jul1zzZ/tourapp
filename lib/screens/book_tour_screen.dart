@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/models/tour.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_application_1/screens/search_tour_screen.dart';
 import 'package:flutter_application_1/navigate/bottom_navbar_adm.dart';
 
 class BookTourScreen extends StatefulWidget {
@@ -94,7 +93,6 @@ class _BookTourScreenState extends State<BookTourScreen> {
             ),
             const SizedBox(height: 32),
 
-            // Кнопка
             isBookingInProgress
                 ? const Center(child: CircularProgressIndicator())
                 : FilledButton.icon(

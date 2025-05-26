@@ -23,15 +23,12 @@ class _TourEditScreenState extends State<TourEditScreen> {
 
   DateTime? _startDate;
   DateTime? _endDate;
-
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.tourId != null) {
-      _loadTourData();
-    }
+    if (widget.tourId != null) _loadTourData();
   }
 
   Future<void> _loadTourData() async {
@@ -56,7 +53,7 @@ class _TourEditScreenState extends State<TourEditScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: isStart ? (_startDate ?? DateTime.now()) : (_endDate ?? DateTime.now()),
-      firstDate: DateTime(2020),
+      firstDate: DateTime.now().subtract(Duration(days: 1)),
       lastDate: DateTime(2100),
     );
     if (picked != null) {
@@ -71,15 +68,27 @@ class _TourEditScreenState extends State<TourEditScreen> {
   }
 
   Future<void> _saveTour() async {
-    if (!_formKey.currentState!.validate() || _startDate == null || _endDate == null) return;
+    if (!_formKey.currentState!.validate()) return;
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Выберите даты начала и окончания.')));
+      return;
+    }
+
+    final price = double.tryParse(_priceController.text) ?? 0;
+    final rating = double.tryParse(_ratingController.text) ?? 0;
+
+    if (rating < 0 || rating > 5) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Рейтинг должен быть от 0 до 5.')));
+      return;
+    }
 
     final data = {
       'city': _cityController.text.trim(),
       'description': _descriptionController.text.trim(),
       'destination': _destinationController.text.trim(),
       'hotel': _hotelController.text.trim(),
-      'price': double.tryParse(_priceController.text) ?? 0,
-      'rating': double.tryParse(_ratingController.text) ?? 0,
+      'price': price,
+      'rating': rating,
       'tourType': _tourTypeController.text.trim(),
       'startDate': _startDate,
       'endDate': _endDate,
@@ -94,6 +103,7 @@ class _TourEditScreenState extends State<TourEditScreen> {
       await toursRef.doc(widget.tourId).update(data);
     }
 
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Тур сохранён')));
     Navigator.pop(context);
   }
 
@@ -107,11 +117,11 @@ class _TourEditScreenState extends State<TourEditScreen> {
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
-          : Padding(
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Form(
                 key: _formKey,
-                child: ListView(
+                child: Column(
                   children: [
                     _buildTextField(_cityController, 'Город'),
                     _buildTextField(_destinationController, 'Страна/направление'),
@@ -120,37 +130,28 @@ class _TourEditScreenState extends State<TourEditScreen> {
                     _buildTextField(_priceController, 'Цена', isNumber: true),
                     _buildTextField(_ratingController, 'Рейтинг (0–5)', isNumber: true),
                     _buildTextField(_descriptionController, 'Описание', maxLines: 4),
-                    SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(_startDate == null
-                              ? 'Дата начала не выбрана'
-                              : 'Начало: ${dateFormatter.format(_startDate!)}'),
-                        ),
-                        TextButton(
-                          onPressed: () => _selectDate(context, true),
-                          child: Text('Выбрать дату'),
-                        ),
-                      ],
+
+                    const SizedBox(height: 16),
+
+                    _buildDateRow(
+                      label: 'Дата начала',
+                      date: _startDate,
+                      onTap: () => _selectDate(context, true),
+                      formatter: dateFormatter,
                     ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(_endDate == null
-                              ? 'Дата окончания не выбрана'
-                              : 'Конец: ${dateFormatter.format(_endDate!)}'),
-                        ),
-                        TextButton(
-                          onPressed: () => _selectDate(context, false),
-                          child: Text('Выбрать дату'),
-                        ),
-                      ],
+                    _buildDateRow(
+                      label: 'Дата окончания',
+                      date: _endDate,
+                      onTap: () => _selectDate(context, false),
+                      formatter: dateFormatter,
                     ),
-                    SizedBox(height: 20),
-                    ElevatedButton(
+
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.save),
+                      label: Text('Сохранить тур'),
                       onPressed: _saveTour,
-                      child: Text('Сохранить'),
+                      style: ElevatedButton.styleFrom(minimumSize: Size.fromHeight(50)),
                     ),
                   ],
                 ),
@@ -165,11 +166,34 @@ class _TourEditScreenState extends State<TourEditScreen> {
       padding: const EdgeInsets.only(bottom: 12.0),
       child: TextFormField(
         controller: controller,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(),
+        ),
         keyboardType: isNumber ? TextInputType.number : TextInputType.text,
         validator: (value) =>
-            value == null || value.isEmpty ? 'Введите $label' : null,
+            value == null || value.trim().isEmpty ? 'Введите $label' : null,
         maxLines: maxLines,
+      ),
+    );
+  }
+
+  Widget _buildDateRow({
+    required String label,
+    required DateTime? date,
+    required VoidCallback onTap,
+    required DateFormat formatter,
+  }) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: ListTile(
+        title: Text(label),
+        subtitle: Text(
+          date == null ? 'Не выбрано' : formatter.format(date),
+          style: TextStyle(color: date == null ? Colors.grey : null),
+        ),
+        trailing: Icon(Icons.calendar_today),
+        onTap: onTap,
       ),
     );
   }

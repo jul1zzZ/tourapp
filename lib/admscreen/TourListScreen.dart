@@ -8,21 +8,28 @@ class TourListScreen extends StatelessWidget {
     final toursRef = FirebaseFirestore.instance.collection('Tours');
 
     return Scaffold(
-      appBar: AppBar(title: Text('Туры')),
+      appBar: AppBar(
+        title: Text('Туры'),
+      ),
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.add),
+        tooltip: 'Добавить тур',
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => TourEditScreen()),
+            PageRouteBuilder(
+              pageBuilder: (_, __, ___) => TourEditScreen(),
+              transitionsBuilder: (_, anim, __, child) {
+                return FadeTransition(opacity: anim, child: child);
+              },
+            ),
           );
         },
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: toursRef.snapshots(),
+        stream: toursRef.orderBy('destination').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            print('Ошибка при загрузке туров: ${snapshot.error}');
             return Center(child: Text('Ошибка при загрузке туров'));
           }
 
@@ -31,67 +38,80 @@ class TourListScreen extends StatelessWidget {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            print('Нет данных о турах');
             return Center(child: Text('Список туров пуст'));
           }
 
           final tours = snapshot.data!.docs;
 
-          print('Загружено туров: ${tours.length}');
-          for (var doc in tours) {
-            print('Тур: ${doc.id}, данные: ${doc.data()}');
-          }
-
           return ListView.builder(
             itemCount: tours.length,
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             itemBuilder: (context, index) {
               final tour = tours[index];
               final data = tour.data() as Map<String, dynamic>;
 
-              return ListTile(
-                title: Text(data['destination'] ?? 'Без названия'),
-                subtitle: Text(data['description'] ?? 'Без описания'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.edit),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => TourEditScreen(tourId: tour.id),
-                          ),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.delete),
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('Удалить тур?'),
-                            content: Text('Вы уверены, что хотите удалить этот тур?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: Text('Отмена'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: Text('Удалить'),
-                              ),
-                            ],
-                          ),
-                        );
+              return Card(
+                margin: EdgeInsets.symmetric(vertical: 6),
+                elevation: 3,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  title: Text(
+                    data['destination'] ?? 'Без названия',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    data['description'] ?? 'Без описания',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.edit, color: Colors.blueAccent),
+                        tooltip: 'Редактировать',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TourEditScreen(tourId: tour.id),
+                            ),
+                          );
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, color: Colors.redAccent),
+                        tooltip: 'Удалить',
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text('Удалить тур?'),
+                              content: Text('Вы уверены, что хотите удалить этот тур?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: Text('Отмена'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: Text('Удалить', style: TextStyle(color: Colors.red)),
+                                ),
+                              ],
+                            ),
+                          );
 
-                        if (confirm == true) {
-                          await tour.reference.delete();
-                        }
-                      },
-                    ),
-                  ],
+                          if (confirm == true) {
+                            await tour.reference.delete();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Тур удалён')),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'add_review_screen.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 
 class UserProfileScreen extends StatefulWidget {
   @override

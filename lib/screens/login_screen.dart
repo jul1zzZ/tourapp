@@ -5,7 +5,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'register_screen.dart';
 import 'password_recovery_screen.dart';
-import 'package:flutter_application_1/screens/search_tour_screen.dart';
 import 'package:flutter_application_1/admscreen/AdminDashboardScreen.dart'; 
 import 'package:flutter_application_1/navigate/bottom_navbar_adm.dart';
 
