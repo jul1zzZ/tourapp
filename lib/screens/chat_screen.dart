@@ -5,10 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
 
-  ChatScreen({required this.currentUserId});
+  const ChatScreen({super.key, required this.currentUserId});
 
   @override
-  _ChatScreenState createState() => _ChatScreenState();
+  State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
@@ -26,9 +26,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _initChat() async {
     chatId = 'support_chat_${widget.currentUserId}';
-
     final chatRef = _firestore.collection('chats').doc(chatId);
-
     final doc = await chatRef.get();
 
     if (!doc.exists) {
@@ -37,7 +35,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'lastMessage': '',
         'lastMessageTime': FieldValue.serverTimestamp(),
-        'participants': ['support', widget.currentUserId], 
+        'participants': ['support', widget.currentUserId],
       });
     }
 
@@ -68,10 +66,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: Text('Чат с поддержкой')),
-        body: Center(child: CircularProgressIndicator()),
+        appBar: AppBar(title: const Text('Чат с поддержкой')),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -82,16 +83,29 @@ class _ChatScreenState extends State<ChatScreen> {
         .orderBy('sentAt', descending: true);
 
     return Scaffold(
-      appBar: AppBar(title: Text('Чат с поддержкой')),
+      appBar: AppBar(
+        title: const Text('Чат с поддержкой'),
+        backgroundColor: colorScheme.primaryContainer,
+        foregroundColor: colorScheme.onPrimaryContainer,
+        centerTitle: true,
+      ),
       body: Column(
         children: [
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: messagesRef.snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
                 final messages = snapshot.data!.docs;
+
+                if (messages.isEmpty) {
+                  return const Center(
+                    child: Text('Нет сообщений. Напишите нам!'),
+                  );
+                }
 
                 return ListView.builder(
                   reverse: true,
@@ -99,17 +113,34 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (context, index) {
                     final data = messages[index].data()! as Map<String, dynamic>;
                     final isMe = data['senderId'] == widget.currentUserId;
+                    final messageText = data['message'] ?? '';
 
                     return Align(
                       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isMe ? Colors.blue[200] : Colors.grey[300],
-                          borderRadius: BorderRadius.circular(12),
+                          color: isMe
+                              ? colorScheme.primaryContainer
+                              : colorScheme.surfaceVariant,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        child: Text(data['message']),
+                        child: Text(
+                          messageText,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: isMe
+                                ? colorScheme.onPrimaryContainer
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                     );
                   },
@@ -117,27 +148,39 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          const Divider(height: 1),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            color: colorScheme.surface,
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _controller,
                     decoration: InputDecoration(
+                      filled: true,
+                      fillColor: colorScheme.surfaceVariant,
                       hintText: 'Введите сообщение...',
-                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: Icon(Icons.send),
+                const SizedBox(width: 8),
+                FilledButton(
                   onPressed: _sendMessage,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.all(16),
+                    shape: const CircleBorder(),
+                  ),
+                  child: const Icon(Icons.send),
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );

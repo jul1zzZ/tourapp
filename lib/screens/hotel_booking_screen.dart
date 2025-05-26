@@ -10,16 +10,13 @@ class HotelBookingScreen extends StatefulWidget {
 }
 
 class _HotelBookingScreenState extends State<HotelBookingScreen> {
-  final CollectionReference hotelsRef =
-      FirebaseFirestore.instance.collection('Hotels');
-  final CollectionReference bookingsRef =
-      FirebaseFirestore.instance.collection('hotel_booking');
+  final CollectionReference hotelsRef = FirebaseFirestore.instance.collection('Hotels');
+  final CollectionReference bookingsRef = FirebaseFirestore.instance.collection('hotel_booking');
 
   DateTime? checkInDate;
   DateTime? checkOutDate;
   int numberOfGuests = 1;
   String selectedPaymentMethod = 'Карта';
-
   bool _isLoading = false;
 
   Future<void> _saveUserFCMToken() async {
@@ -39,43 +36,26 @@ class _HotelBookingScreenState extends State<HotelBookingScreen> {
   Future<void> bookHotel(BuildContext context, Map<String, dynamic> hotelData) async {
     final user = FirebaseAuth.instance.currentUser;
 
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка: пользователь не авторизован.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (checkInDate == null || checkOutDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Пожалуйста, выберите даты заезда и выезда.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (user == null || checkInDate == null || checkOutDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Проверьте данные бронирования.'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
       return;
     }
 
     if (!checkOutDate!.isAfter(checkInDate!)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Дата выезда должна быть позже даты заезда.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Дата выезда должна быть позже даты заезда.'),
+        backgroundColor: Theme.of(context).colorScheme.errorContainer,
+      ));
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       await _saveUserFCMToken();
-
       final nights = checkOutDate!.difference(checkInDate!).inDays;
       final pricePerNight = hotelData['price']?.toDouble() ?? 0.0;
       final totalPrice = nights * pricePerNight;
@@ -92,35 +72,31 @@ class _HotelBookingScreenState extends State<HotelBookingScreen> {
         'timestamp': FieldValue.serverTimestamp(),
       });
 
-      Navigator.push(
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => BookingConfirmationScreen(hotelName: hotelData['name']),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка при бронировании: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Ошибка при бронировании: ${e.toString()}'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _selectDate(BuildContext context, bool isCheckIn) async {
     final now = DateTime.now();
-    final initialDate = isCheckIn
+    final initial = isCheckIn
         ? (checkInDate ?? now)
-        : (checkOutDate ?? (checkInDate != null ? checkInDate!.add(Duration(days: 1)) : now.add(Duration(days: 1))));
+        : (checkOutDate ?? (checkInDate ?? now).add(const Duration(days: 1)));
 
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
-      initialDate: initialDate,
+      initialDate: initial,
       firstDate: now,
       lastDate: DateTime(now.year + 2),
     );
@@ -129,7 +105,7 @@ class _HotelBookingScreenState extends State<HotelBookingScreen> {
       setState(() {
         if (isCheckIn) {
           checkInDate = picked;
-          if (checkOutDate != null && !checkOutDate!.isAfter(checkInDate!)) {
+          if (checkOutDate != null && !checkOutDate!.isAfter(picked)) {
             checkOutDate = null;
           }
         } else {
@@ -141,30 +117,37 @@ class _HotelBookingScreenState extends State<HotelBookingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: Text('Бронирование отелей')),
+      appBar: AppBar(
+        title: const Text('Бронирование отелей'),
+        backgroundColor: colorScheme.primaryContainer,
+        foregroundColor: colorScheme.onPrimaryContainer,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: hotelsRef.snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
 
           final hotels = snapshot.data!.docs;
+
           if (hotels.isEmpty) {
-            return Center(child: Text('Нет доступных отелей'));
+            return const Center(child: Text('Нет доступных отелей'));
           }
 
           return ListView.builder(
             itemCount: hotels.length,
+            padding: const EdgeInsets.all(12),
             itemBuilder: (context, index) {
               final doc = hotels[index];
               final data = doc.data() as Map<String, dynamic>;
 
               return Card(
-                margin: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 1,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -172,27 +155,28 @@ class _HotelBookingScreenState extends State<HotelBookingScreen> {
                     children: [
                       Text(
                         data['name'] ?? 'Без названия',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      SizedBox(height: 6),
-                      Text(data['city'] ?? 'Город неизвестен', style: TextStyle(fontSize: 16)),
-                      SizedBox(height: 6),
-                      Text('Цена за ночь: ${data['price'] ?? '—'} руб.', style: TextStyle(fontSize: 16)),
-                      Text('Рейтинг: ${data['rating']?.toString() ?? 'N/A'} ⭐', style: TextStyle(fontSize: 16)),
-                      Divider(height: 20, thickness: 1),
+                      const SizedBox(height: 4),
+                      Text(data['city'] ?? 'Город неизвестен'),
+                      const SizedBox(height: 8),
+                      Text('Цена за ночь: ${data['price']}₽'),
+                      Text('Рейтинг: ${data['rating'] ?? '—'} ⭐'),
+                      const Divider(height: 24),
+
                       Row(
                         children: [
                           Expanded(
-                            child: ElevatedButton(
+                            child: FilledButton.tonal(
                               onPressed: () => _selectDate(context, true),
                               child: Text(checkInDate == null
                                   ? 'Дата заезда'
                                   : 'Заезд: ${checkInDate!.toLocal().toString().split(' ')[0]}'),
                             ),
                           ),
-                          SizedBox(width: 12),
+                          const SizedBox(width: 12),
                           Expanded(
-                            child: ElevatedButton(
+                            child: FilledButton.tonal(
                               onPressed: () => _selectDate(context, false),
                               child: Text(checkOutDate == null
                                   ? 'Дата выезда'
@@ -201,57 +185,63 @@ class _HotelBookingScreenState extends State<HotelBookingScreen> {
                           ),
                         ],
                       ),
-                      SizedBox(height: 14),
+
+                      const SizedBox(height: 16),
+
                       Row(
                         children: [
-                          Text('Гостей: $numberOfGuests', style: TextStyle(fontSize: 16)),
+                          Text('Гостей: $numberOfGuests'),
                           Expanded(
                             child: Slider(
                               value: numberOfGuests.toDouble(),
                               min: 1,
                               max: 10,
                               divisions: 9,
-                              label: numberOfGuests.toString(),
-                              onChanged: (value) {
+                              label: '$numberOfGuests',
+                              onChanged: (val) {
                                 setState(() {
-                                  numberOfGuests = value.toInt();
+                                  numberOfGuests = val.toInt();
                                 });
                               },
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(height: 14),
+
+                      const SizedBox(height: 12),
+
                       Row(
                         children: [
-                          Text('Оплата:', style: TextStyle(fontSize: 16)),
-                          SizedBox(width: 12),
+                          const Text('Оплата:'),
+                          const SizedBox(width: 12),
                           DropdownButton<String>(
                             value: selectedPaymentMethod,
                             items: ['Карта', 'Электронный кошелек', 'Наличные']
-                                .map((method) => DropdownMenuItem<String>(
+                                .map((method) => DropdownMenuItem(
                                       value: method,
                                       child: Text(method),
                                     ))
                                 .toList(),
-                            onChanged: (value) {
-                              if (value != null) {
+                            onChanged: (val) {
+                              if (val != null) {
                                 setState(() {
-                                  selectedPaymentMethod = value;
+                                  selectedPaymentMethod = val;
                                 });
                               }
                             },
                           ),
                         ],
                       ),
-                      SizedBox(height: 20),
+
+                      const SizedBox(height: 20),
+
                       Align(
                         alignment: Alignment.centerRight,
                         child: _isLoading
-                            ? CircularProgressIndicator()
-                            : ElevatedButton(
+                            ? const CircularProgressIndicator()
+                            : FilledButton(
                                 onPressed: () => bookHotel(context, data),
-                                child: Text('Забронировать'),
+                                child: const Text('Забронировать'),
                               ),
                       ),
                     ],

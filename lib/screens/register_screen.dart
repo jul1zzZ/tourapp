@@ -11,6 +11,7 @@ class RegistrationScreen extends StatefulWidget {
 }
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
@@ -23,13 +24,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   );
 
   String? _errorMessage;
+  bool _isLoading = false;
 
   Future<void> _registerUser() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     try {
       final rawPhone = phoneMaskFormatter.getUnmaskedText();
-
       if (rawPhone.length != 10 || !rawPhone.startsWith('9')) {
         setState(() {
+          _isLoading = false;
           _errorMessage =
               'Введите корректный номер телефона, начиная с 9 (пример: 9123456789)';
         });
@@ -62,11 +71,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       Fluttertoast.showToast(
         msg: "Регистрация успешна!",
-        toastLength: Toast.LENGTH_SHORT,
-        gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.green,
         textColor: Colors.white,
-        fontSize: 16.0,
       );
 
       Navigator.pushReplacement(
@@ -77,50 +83,100 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       setState(() {
         _errorMessage = e.message;
       });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InputDecoration(
+      prefixIcon: Icon(icon),
+      labelText: label,
+      filled: true,
+      fillColor: colorScheme.surfaceVariant,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: Text("Регистрация")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(labelText: 'Имя'),
+      appBar: AppBar(
+        title: const Text("Регистрация"),
+        backgroundColor: colorScheme.primaryContainer,
+        foregroundColor: colorScheme.onPrimaryContainer,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: _inputDecoration('Имя', Icons.person),
+                  validator: (value) =>
+                      value == null || value.isEmpty ? 'Введите имя' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phoneController,
+                  decoration: _inputDecoration('Телефон', Icons.phone),
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [phoneMaskFormatter],
+                  validator: (value) =>
+                      value == null || value.isEmpty ? 'Введите телефон' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: _inputDecoration('Email', Icons.email),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) => value != null && value.contains('@')
+                      ? null
+                      : 'Введите корректный email',
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: _inputDecoration('Пароль', Icons.lock),
+                  obscureText: true,
+                  validator: (value) =>
+                      value != null && value.length >= 6
+                          ? null
+                          : 'Минимум 6 символов',
+                ),
+                const SizedBox(height: 24),
+                _isLoading
+                    ? const CircularProgressIndicator()
+                    : SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _registerUser,
+                          icon: const Icon(Icons.check),
+                          label: const Text('Зарегистрироваться'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      ),
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
+              ],
             ),
-            TextField(
-              controller: _phoneController,
-              decoration: InputDecoration(labelText: 'Телефон'),
-              keyboardType: TextInputType.phone,
-              inputFormatters: [phoneMaskFormatter],
-            ),
-            TextField(
-              controller: _emailController,
-              decoration: InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            TextField(
-              controller: _passwordController,
-              decoration: InputDecoration(labelText: 'Пароль'),
-              obscureText: true,
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _registerUser,
-              child: Text('Зарегистрироваться'),
-            ),
-            if (_errorMessage != null) ...[
-              SizedBox(height: 20),
-              Text(
-                _errorMessage!,
-                style: TextStyle(color: Colors.red),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );

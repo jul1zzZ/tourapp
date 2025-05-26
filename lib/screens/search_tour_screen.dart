@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_application_1/models/tour.dart';
-import 'package:flutter_application_1/screens/tour_detail_screen.dart';
-import 'package:flutter_application_1/screens/login_screen.dart'; // <-- Убедись, что путь правильный
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_application_1/models/tour.dart';
+import 'package:flutter_application_1/screens/login_screen.dart';
+import 'package:flutter_application_1/screens/tour_detail_screen.dart';
 
 class SearchToursScreen extends StatefulWidget {
   @override
@@ -36,37 +36,30 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
     try {
       var snapshot = await FirebaseFirestore.instance.collection('Tours').get();
 
-      final loadedTours = snapshot.docs
-          .map((doc) => Tour.fromFirestore(doc))
-          .toList();
-
+      final loadedTours = snapshot.docs.map((doc) => Tour.fromFirestore(doc)).toList();
       final tourIds = snapshot.docs.map((doc) => doc.id).toList();
 
-      // Получаем отзывы для этих туров
       var reviewsSnapshot = await FirebaseFirestore.instance
           .collection('reviews')
           .where('tourId', whereIn: tourIds)
           .get();
 
-      // Группируем рейтинги по tourId
       Map<String, List<double>> ratingsMap = {};
-      for (var reviewDoc in reviewsSnapshot.docs) {
-        var data = reviewDoc.data();
-        String tid = data['tourId'];
-        double rating = (data['rating'] ?? 0).toDouble();
+      for (var review in reviewsSnapshot.docs) {
+        final data = review.data();
+        final tourId = data['tourId'];
+        final rating = (data['rating'] ?? 0).toDouble();
 
-        ratingsMap.putIfAbsent(tid, () => []);
-        ratingsMap[tid]!.add(rating);
+        ratingsMap.putIfAbsent(tourId, () => []);
+        ratingsMap[tourId]!.add(rating);
       }
 
-      // Считаем средний рейтинг для каждого тура
       Map<String, double> toursAvgRatings = {};
       ratingsMap.forEach((key, ratings) {
         double avg = ratings.reduce((a, b) => a + b) / ratings.length;
         toursAvgRatings[key] = avg;
       });
 
-      // Обновляем объекты Tour с вычисленным рейтингом
       List<Tour> updatedTours = loadedTours.map((tour) {
         double? avgRating = toursAvgRatings[tour.id];
         return tour.copyWith(rating: avgRating ?? tour.rating);
@@ -88,7 +81,7 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
         maxPrice = selectedMaxPrice = maxP;
       });
     } catch (e) {
-      print('Ошибка при загрузке туров: $e');
+      print('Ошибка загрузки: $e');
     }
   }
 
@@ -99,11 +92,8 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
             tour.destination.toLowerCase().contains(_destinationController.text.toLowerCase());
 
         final matchesType = selectedType == 'Все' || tour.tourType == selectedType;
-
         final matchesDate = selectedStartDate == null || tour.startDate.isAfter(selectedStartDate!);
-
         final matchesPrice = tour.price >= selectedMinPrice && tour.price <= selectedMaxPrice;
-
         final matchesRating = tour.rating >= selectedMinRating;
 
         return matchesDestination && matchesType && matchesDate && matchesPrice && matchesRating;
@@ -115,7 +105,7 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: selectedStartDate ?? DateTime.now(),
-      firstDate: DateTime(2000),
+      firstDate: DateTime.now(),
       lastDate: DateTime(2100),
     );
     if (picked != null) {
@@ -128,13 +118,14 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Поиск туров'),
+        title: const Text('Поиск туров'),
         actions: [
           IconButton(
-            icon: Icon(Icons.logout),
-            tooltip: 'Выйти',
+            icon: const Icon(Icons.logout),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
               Navigator.pushAndRemoveUntil(
@@ -143,27 +134,38 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
                 (route) => false,
               );
             },
-          ),
+          )
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            TextField(
+            TextFormField(
               controller: _destinationController,
-              decoration: InputDecoration(labelText: 'Направление'),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                labelText: 'Направление',
+                filled: true,
+                fillColor: colorScheme.surfaceVariant,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
               onChanged: (_) => _filterTours(),
             ),
-            DropdownButton<String>(
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
               value: selectedType,
-              isExpanded: true,
-              items: tourTypes
-                  .map((type) => DropdownMenuItem(
-                        child: Text(type),
-                        value: type,
-                      ))
-                  .toList(),
+              decoration: InputDecoration(
+                labelText: 'Тип тура',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                filled: true,
+              ),
+              items: tourTypes.map((type) {
+                return DropdownMenuItem(
+                  value: type,
+                  child: Text(type),
+                );
+              }).toList(),
               onChanged: (value) {
                 setState(() {
                   selectedType = value ?? 'Все';
@@ -171,74 +173,76 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
                 _filterTours();
               },
             ),
-            Row(
-              children: [
-                Text(selectedStartDate == null
-                    ? 'Выберите дату'
-                    : 'Дата с: ${selectedStartDate!.toLocal().toString().split(' ')[0]}'),
-                TextButton(
-                  onPressed: () => _selectDate(context),
-                  child: Text('Выбрать дату'),
-                ),
-              ],
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              icon: const Icon(Icons.date_range),
+              label: Text(selectedStartDate == null
+                  ? 'Выбрать дату'
+                  : 'Дата с: ${selectedStartDate!.toLocal().toString().split(' ')[0]}'),
+              onPressed: () => _selectDate(context),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Цена: от ${selectedMinPrice.toInt()} до ${selectedMaxPrice.toInt()} руб.'),
-                RangeSlider(
-                  min: minPrice,
-                  max: maxPrice,
-                  values: RangeValues(selectedMinPrice, selectedMaxPrice),
-                  onChanged: (values) {
-                    setState(() {
-                      selectedMinPrice = values.start;
-                      selectedMaxPrice = values.end;
-                    });
-                    _filterTours();
-                  },
-                ),
-              ],
+            const SizedBox(height: 20),
+            Text('Цена: от ${selectedMinPrice.toInt()} до ${selectedMaxPrice.toInt()} ₽'),
+            RangeSlider(
+              values: RangeValues(selectedMinPrice, selectedMaxPrice),
+              min: minPrice,
+              max: maxPrice,
+              divisions: 20,
+              labels: RangeLabels(
+                selectedMinPrice.toStringAsFixed(0),
+                selectedMaxPrice.toStringAsFixed(0),
+              ),
+              onChanged: (values) {
+                setState(() {
+                  selectedMinPrice = values.start;
+                  selectedMaxPrice = values.end;
+                });
+                _filterTours();
+              },
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Минимальный рейтинг: ${selectedMinRating.toStringAsFixed(1)}'),
-                Slider(
-                  min: 0,
-                  max: 5,
-                  divisions: 10,
-                  label: selectedMinRating.toStringAsFixed(1),
-                  value: selectedMinRating,
-                  onChanged: (value) {
-                    setState(() {
-                      selectedMinRating = value;
-                    });
-                    _filterTours();
-                  },
-                ),
-              ],
+            const SizedBox(height: 8),
+            Text('Минимальный рейтинг: ${selectedMinRating.toStringAsFixed(1)} ★'),
+            Slider(
+              min: 0,
+              max: 5,
+              divisions: 10,
+              label: selectedMinRating.toStringAsFixed(1),
+              value: selectedMinRating,
+              onChanged: (value) {
+                setState(() {
+                  selectedMinRating = value;
+                });
+                _filterTours();
+              },
             ),
-            Expanded(
-              child: filteredTours.isEmpty
-                  ? Center(child: Text('Нет туров по заданным параметрам'))
-                  : ListView.builder(
-                      itemCount: filteredTours.length,
-                      itemBuilder: (context, index) {
-                        final tour = filteredTours[index];
-                        return ListTile(
-                          title: Text(tour.destination),
-                          subtitle: Text('${tour.price} руб.\nРейтинг: ${tour.rating.toStringAsFixed(1)} ★'),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => TourDetailsScreen(tour: tour),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            Text('Найдено: ${filteredTours.length} туров',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            if (filteredTours.isEmpty)
+              const Center(child: Text('Нет туров по заданным параметрам')),
+            ...filteredTours.map((tour) => Card(
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  child: ListTile(
+                    title: Text(tour.destination),
+                    subtitle: Text(
+                        '${tour.price} ₽\nРейтинг: ${tour.rating.toStringAsFixed(1)} ★'),
+                    trailing: const Icon(Icons.arrow_forward_ios),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TourDetailsScreen(tour: tour),
+                        ),
+                      );
+                    },
+                  ),
+                )),
           ],
         ),
       ),

@@ -3,17 +3,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/screens/search_tour_screen.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
 import '../screens/chat_screen.dart';
-import '../screens/hotel_booking_screen.dart'; // 👈 импортируем экран бронирования
+import '../screens/hotel_booking_screen.dart';
 import 'package:flutter_application_1/admscreen/AdminDashboardScreen.dart';
 import '../admscreen/admin_chats_list_screen.dart';
 
 class BottomNavbar extends StatefulWidget {
   final bool isAdmin;
 
-  BottomNavbar({required this.isAdmin});
+  const BottomNavbar({super.key, required this.isAdmin});
 
   @override
-  _BottomNavbarState createState() => _BottomNavbarState();
+  State<BottomNavbar> createState() => _BottomNavbarState();
 }
 
 class _BottomNavbarState extends State<BottomNavbar> {
@@ -22,45 +22,95 @@ class _BottomNavbarState extends State<BottomNavbar> {
   @override
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser!.uid;
+    final isWideScreen = MediaQuery.of(context).size.width >= 600;
 
     final userPages = [
-      SearchToursScreen(),
-      HotelBookingScreen(), // 👈 добавили экран бронирования
-      UserProfileScreen(),
-      ChatScreen(currentUserId: FirebaseAuth.instance.currentUser!.uid,),
+       SearchToursScreen(),
+       HotelBookingScreen(),
+       UserProfileScreen(),
+      ChatScreen(currentUserId: userId),
     ];
 
-    final userNavItems = const [
-      BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Поиск'),
-      BottomNavigationBarItem(icon: Icon(Icons.hotel), label: 'Отели'),
-      BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Профиль'),
-      BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Поддержка'),
+    final userDestinations = const [
+      NavigationDestination(
+        icon: Icon(Icons.search),
+        selectedIcon: Icon(Icons.search_outlined),
+        label: 'Поиск',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.hotel),
+        selectedIcon: Icon(Icons.hotel_outlined),
+        label: 'Отели',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.person),
+        selectedIcon: Icon(Icons.person_outline),
+        label: 'Профиль',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.chat_bubble_outline),
+        selectedIcon: Icon(Icons.chat),
+        label: 'Поддержка',
+      ),
     ];
 
     final adminPages = [
-      AdminDashboardScreen(),
-      AdminChatsListScreen(),
+       AdminDashboardScreen(),
+       AdminChatsListScreen(),
     ];
 
-    final adminNavItems = const [
-      BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Панель'),
-      BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Чаты'),
+    final adminDestinations = const [
+      NavigationDestination(
+        icon: Icon(Icons.dashboard_outlined),
+        selectedIcon: Icon(Icons.dashboard),
+        label: 'Панель',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.chat_bubble_outline),
+        selectedIcon: Icon(Icons.chat),
+        label: 'Чаты',
+      ),
     ];
+
+    final pages = widget.isAdmin ? adminPages : userPages;
+    final destinations = widget.isAdmin ? adminDestinations : userDestinations;
 
     return Scaffold(
-      body: widget.isAdmin ? adminPages[_selectedIndex] : userPages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        items: widget.isAdmin ? adminNavItems : userNavItems,
-        selectedItemColor: Colors.blue,       // цвет активного пункта
-        unselectedItemColor: Colors.grey,     // цвет неактивных пунктов
-        backgroundColor: Colors.white,         // фон панели (можно поменять)
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+      body: Row(
+        children: [
+          if (isWideScreen)
+            NavigationRail(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+              labelType: NavigationRailLabelType.all,
+              destinations: destinations
+                  .map((d) => NavigationRailDestination(
+                        icon: d.icon,
+                        selectedIcon: d.selectedIcon,
+                        label: Text(d.label),
+                      ))
+                  .toList(),
+            ),
+          Expanded(child: pages[_selectedIndex]),
+        ],
       ),
+      bottomNavigationBar: isWideScreen
+          ? null
+          : NavigationBar(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+              animationDuration: const Duration(milliseconds: 400),
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              destinations: destinations,
+            ),
     );
   }
 }

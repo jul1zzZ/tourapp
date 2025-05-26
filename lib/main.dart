@@ -10,7 +10,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print('Сообщение в фоне: ${message.messageId}');
 }
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -46,7 +45,6 @@ class _MyAppState extends State<MyApp> {
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       print('Пользователь разрешил уведомления');
 
-      // Получаем токен и сохраняем в Firestore если пользователь залогинен
       String? token = await _messaging.getToken();
       print('FCM Token: $token');
 
@@ -57,7 +55,6 @@ class _MyAppState extends State<MyApp> {
         });
       }
 
-      // Слушаем уведомления в foreground и показываем AlertDialog
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         print('Уведомление в foreground: ${message.messageId}');
         if (message.notification != null) {
@@ -72,7 +69,7 @@ class _MyAppState extends State<MyApp> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(navigatorKey.currentContext!).pop(),
-                  child: Text('ОК'),
+                  child: const Text('ОК'),
                 ),
               ],
             ),
@@ -84,13 +81,31 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
       title: 'Flutter App',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+  pageTransitionsTheme: const PageTransitionsTheme(
+    builders: {
+      TargetPlatform.android: CupertinoPageTransitionsBuilder(), // или FadeUpwardsPageTransitionsBuilder()
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    },
+  ),
+),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+      ),
+      themeMode: ThemeMode.system,
       home: LoginScreen(),
     );
   }
