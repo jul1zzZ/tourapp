@@ -1,199 +1,198 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/models/tour.dart';
-import 'package:intl/intl.dart';
-import 'package:flutter_application_1/navigate/bottom_navbar_adm.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
-class BookTourScreen extends StatefulWidget {
+class BookingScreen extends StatefulWidget {
   final Tour tour;
+  final int touristsCount;
+  final String userEmail; // добавляем
 
-  const BookTourScreen({required this.tour, Key? key}) : super(key: key);
+  const BookingScreen({
+    super.key,
+    required this.tour,
+    required this.touristsCount,
+    required this.userEmail,
+  });
 
   @override
-  _BookTourScreenState createState() => _BookTourScreenState();
+  State<BookingScreen> createState() => _BookingScreenState();
 }
 
-class _BookTourScreenState extends State<BookTourScreen> {
-  DateTime? selectedDate;
-  int numberOfPeople = 1;
-  bool isBookingInProgress = false;
-  String? _selectedPaymentMethod;
+class _BookingScreenState extends State<BookingScreen> {
+  final _formKey = GlobalKey<FormState>();
 
-  final List<String> _paymentMethods = [
-    'Карта Visa/MasterCard',
-    'Электронный кошелёк (ЮMoney, QIWI)',
-    'Наличные при встрече',
-  ];
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  late final TextEditingController _emailController;
+
+  final maskFormatter = MaskTextInputFormatter(
+    mask: '+7 ### ###-##-##',
+    filter: {"#": RegExp(r'[0-9]')},
+  );
+
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.userEmail);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _submitBooking() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      await FirebaseFirestore.instance.collection('Bookings').add({
+        'tourId': widget.tour.id, // убедись, что id есть в модели
+        'tourTitle': widget.tour.title,
+        'touristsCount': widget.touristsCount,
+        'name': _nameController.text,
+        'phone': _phoneController.text,
+        'email': _emailController.text,
+        'totalPrice': widget.tour.basePrice * widget.touristsCount,
+        'bookingDate': Timestamp.now(),
+      });
+
+      setState(() => _isSubmitting = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Бронирование успешно оформлено!')),
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка при бронировании: $e')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final totalPrice = widget.tour.basePrice * widget.touristsCount;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Бронирование тура')),
+      appBar: AppBar(
+        title: const Text('Бронирование тура'),
+        backgroundColor: Colors.teal,
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: [
-            Text(
-              'Тур: ${widget.tour.destination}',
-              style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-
-            // Выбор даты
-            FilledButton(
-              onPressed: _selectDate,
-              child: Text(
-                selectedDate == null
-                    ? 'Выберите дату'
-                    : 'Дата: ${DateFormat('dd.MM.yyyy').format(selectedDate!)}',
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.tour.title,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Кол-во человек
-            Text('Количество человек: $numberOfPeople',
-                style: textTheme.titleMedium),
-            Slider(
-              value: numberOfPeople.toDouble(),
-              min: 1,
-              max: 10,
-              divisions: 9,
-              label: '$numberOfPeople',
-              onChanged: (value) {
-                setState(() {
-                  numberOfPeople = value.toInt();
-                });
-              },
-            ),
-            const SizedBox(height: 24),
-
-            // Оплата
-            Text('Способ оплаты:', style: textTheme.titleMedium),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _selectedPaymentMethod,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Выберите способ оплаты',
+              const SizedBox(height: 8),
+              Text(
+                'Количество туристов: ${widget.touristsCount}',
+                style: const TextStyle(fontSize: 16),
               ),
-              items: _paymentMethods.map((method) {
-                return DropdownMenuItem(
-                  value: method,
-                  child: Text(method),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedPaymentMethod = value;
-                });
-              },
-            ),
-            const SizedBox(height: 32),
-
-            isBookingInProgress
-                ? const Center(child: CircularProgressIndicator())
-                : FilledButton.icon(
-                    onPressed: _bookTour,
-                    icon: const Icon(Icons.check),
-                    label: const Text('Забронировать'),
-                  ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _selectDate() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
-    );
-
-    if (picked != null && picked != selectedDate) {
-      setState(() {
-        selectedDate = picked;
-      });
-    }
-  }
-
-  Future<void> _simulatePayment() async {
-    return showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Оплата прошла успешно'),
-        content: Text('Метод: $_selectedPaymentMethod'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ОК'),
+              const SizedBox(height: 8),
+              Text(
+                'Итоговая цена: ${totalPrice.toStringAsFixed(0)} ₽',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.teal[700],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Имя',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator:
+                          (value) =>
+                              (value == null || value.isEmpty)
+                                  ? 'Введите имя'
+                                  : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [maskFormatter],
+                      decoration: const InputDecoration(
+                        labelText: 'Телефон',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty)
+                          return 'Введите телефон';
+                        if (maskFormatter.getUnmaskedText().length != 10)
+                          return 'Введите полный номер телефона';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      enabled: false, // запрещаем редактирование, если нужно
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isSubmitting ? null : _submitBooking,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child:
+                            _isSubmitting
+                                ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Text(
+                                  'Подтвердить бронирование',
+                                  style: TextStyle(fontSize: 18),
+                                ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _bookTour() async {
-    if (selectedDate == null) {
-      _showErrorMessage('Выберите дату бронирования.');
-      return;
-    }
-
-    if (_selectedPaymentMethod == null) {
-      _showErrorMessage('Выберите способ оплаты.');
-      return;
-    }
-
-    setState(() {
-      isBookingInProgress = true;
-    });
-
-    try {
-      await _simulatePayment();
-
-      await FirebaseFirestore.instance.collection('Bookings').add({
-        'userId': FirebaseAuth.instance.currentUser!.uid,
-        'tourId': widget.tour.destination,
-        'date': selectedDate,
-        'numberOfPeople': numberOfPeople,
-        'totalPrice': widget.tour.price * numberOfPeople,
-        'paymentMethod': _selectedPaymentMethod,
-        'status': 'Ожидает подтверждения',
-        'timestamp': Timestamp.now(),
-      });
-
-      _showSuccessMessage('Бронирование успешно!');
-
-      await Future.delayed(const Duration(seconds: 1));
-
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => BottomNavbar(isAdmin: false)));
-    } catch (e) {
-      _showErrorMessage('Ошибка бронирования, попробуйте позже.');
-    } finally {
-      setState(() {
-        isBookingInProgress = false;
-      });
-    }
-  }
-
-  void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.red)),
-        backgroundColor: Colors.red.shade50,
-      ),
-    );
-  }
-
-  void _showSuccessMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.green)),
-        backgroundColor: Colors.green.shade50,
+        ),
       ),
     );
   }

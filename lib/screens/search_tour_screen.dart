@@ -1,28 +1,29 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_application_1/models/tour.dart';
 import 'package:flutter_application_1/screens/login_screen.dart';
 import 'package:flutter_application_1/screens/tour_detail_screen.dart';
+import 'package:intl/intl.dart';
 
 class SearchToursScreen extends StatefulWidget {
   const SearchToursScreen({super.key});
 
   @override
-  _SearchToursScreenState createState() => _SearchToursScreenState();
+  State<SearchToursScreen> createState() => _SearchToursScreenState();
 }
 
 class _SearchToursScreenState extends State<SearchToursScreen> {
-  List<Tour> tours = [], filteredTours = [];
-  List<String> tourTypes = ['Все'];
+  final _departureController = TextEditingController(text: 'Москва');
+  final _dateController = TextEditingController();
 
-  final _destinationController = TextEditingController();
-  String selectedType = 'Все';
+  String? selectedDestination;
   DateTime? selectedStartDate;
+  int? selectedNights;
+  int selectedTourists = 2;
 
-  double minPrice = 0, maxPrice = 10000;
-  double selectedMinPrice = 0, selectedMaxPrice = 10000;
-  double selectedMinRating = 0;
+  List<Tour> tours = [], filteredTours = [];
+  List<String> destinations = [];
 
   @override
   void initState() {
@@ -33,48 +34,21 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
   Future<void> _fetchTours() async {
     try {
       final snapshot =
-          await FirebaseFirestore.instance.collection('Tours').get();
+          await FirebaseFirestore.instance.collection('tours').get();
       final loadedTours = snapshot.docs.map(Tour.fromFirestore).toList();
 
-      final tourIds = snapshot.docs.map((doc) => doc.id).toList();
-      final reviewsSnapshot =
-          await FirebaseFirestore.instance
-              .collection('reviews')
-              .where('tourId', whereIn: tourIds)
-              .get();
-
-      final ratingsMap = <String, List<double>>{};
-      for (var review in reviewsSnapshot.docs) {
-        final data = review.data();
-        final id = data['tourId'];
-        ratingsMap
-            .putIfAbsent(id, () => [])
-            .add((data['rating'] ?? 0).toDouble());
-      }
-
-      final avgRatings = ratingsMap.map(
-        (k, v) => MapEntry(k, v.reduce((a, b) => a + b) / v.length),
-      );
-      final updatedTours =
-          loadedTours
-              .map((t) => t.copyWith(rating: avgRatings[t.id] ?? 0))
-              .toList();
-
-      final types =
-          {'Все', ...updatedTours.map((t) => t.tourType)}.toList()..sort();
-      final prices = updatedTours.map((t) => t.price);
-      final minP = prices.reduce((a, b) => a < b ? a : b);
-      final maxP = prices.reduce((a, b) => a > b ? a : b);
+      final destinationSet = {
+        for (var t in loadedTours)
+          '${t.city}${t.destination.isNotEmpty ? ', ${t.destination}' : ''}',
+      };
 
       setState(() {
-        tours = updatedTours;
-        tourTypes = types;
-        minPrice = selectedMinPrice = minP;
-        maxPrice = selectedMaxPrice = maxP;
-        filteredTours = updatedTours;
+        tours = loadedTours;
+        filteredTours = loadedTours;
+        destinations = destinationSet.toList()..sort();
       });
     } catch (e) {
-      print('Ошибка загрузки: $e');
+      print('Ошибка загрузки туров: $e');
     }
   }
 
@@ -83,38 +57,48 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
       filteredTours =
           tours.where((tour) {
             final matchesDestination =
-                _destinationController.text.isEmpty ||
-                tour.destination.toLowerCase().contains(
-                  _destinationController.text.toLowerCase(),
+                selectedDestination == null ||
+                '${tour.city}${tour.destination.isNotEmpty ? ', ${tour.destination}' : ''}' ==
+                    selectedDestination;
+
+            final matchesDate =
+                selectedStartDate == null ||
+                selectedStartDate!.isAfter(
+                  DateTime.now().subtract(const Duration(days: 1)),
                 );
 
-            return matchesDestination &&
-                (selectedType == 'Все' || tour.tourType == selectedType) &&
-                (selectedStartDate == null ||
-                    tour.startDate.isAfter(selectedStartDate!)) &&
-                tour.price >= selectedMinPrice &&
-                tour.price <= selectedMaxPrice &&
-                tour.rating >= selectedMinRating;
+            // Фильтрация по ночам с учетом minNights и maxNights
+            final matchesNights =
+                selectedNights == null ||
+                (tour.minNights <= selectedNights! &&
+                    selectedNights! <= tour.maxNights);
+
+            return matchesDestination && matchesDate && matchesNights;
           }).toList();
     });
   }
 
-  Future<void> _selectDate() async {
-    final picked = await showDatePicker(
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: selectedStartDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
     );
+
     if (picked != null) {
-      setState(() => selectedStartDate = picked);
+      setState(() {
+        selectedStartDate = picked.start;
+        selectedNights = picked.end.difference(picked.start).inDays;
+        _dateController.text = DateFormat('dd.MM.yyyy').format(picked.start);
+      });
       _filterTours();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colortheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -135,20 +119,11 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildTextField(),
+          _buildInputFields(),
           const SizedBox(height: 12),
-          _buildDropdown(),
-          const SizedBox(height: 12),
-          _buildDateButton(),
-          const SizedBox(height: 20),
-          _buildPriceSlider(),
-          _buildRatingSlider(),
-          const Divider(),
-          const SizedBox(height: 8),
-          Text(
-            'Найдено: ${filteredTours.length} туров',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          ElevatedButton(onPressed: _filterTours, child: const Text('Поиск')),
+          const Divider(height: 32),
+          Text('Найдено: ${filteredTours.length} туров'),
           const SizedBox(height: 12),
           ..._buildTourCards(),
         ],
@@ -156,114 +131,185 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
     );
   }
 
-  Widget _buildTextField() => TextFormField(
-    controller: _destinationController,
-    decoration: InputDecoration(
-      prefixIcon: const Icon(Icons.search),
-      labelText: 'Направление',
-      filled: true,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-    ),
-    onChanged: (_) => _filterTours(),
-  );
+  Widget _buildInputFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildTextField('Откуда', _departureController, enabled: false),
+        const SizedBox(height: 12),
+        _buildDestinationDropdown(),
+        const SizedBox(height: 12),
+        _buildDateField(),
+        const SizedBox(height: 12),
+        _buildNightsDropdown(),
+        const SizedBox(height: 12),
+        _buildTouristsDropdown(),
+      ],
+    );
+  }
 
-  Widget _buildDropdown() => DropdownButtonFormField<String>(
-    value: selectedType,
-    decoration: InputDecoration(
-      labelText: 'Тип тура',
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-    ),
-    items:
-        tourTypes
-            .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-            .toList(),
-    onChanged: (value) {
-      setState(() => selectedType = value ?? 'Все');
-      _filterTours();
-    },
-  );
-
-  Widget _buildDateButton() => FilledButton.icon(
-    icon: const Icon(Icons.date_range),
-    label: Text(
-      selectedStartDate == null
-          ? 'Выбрать дату'
-          : 'С: ${selectedStartDate!.toLocal().toString().split(' ')[0]}',
-    ),
-    onPressed: _selectDate,
-  );
-
-  Widget _buildPriceSlider() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        'Цена: от ${selectedMinPrice.toInt()} до ${selectedMaxPrice.toInt()} ₽',
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller, {
+    bool enabled = true,
+  }) {
+    return TextFormField(
+      controller: controller,
+      enabled: enabled,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
       ),
-      RangeSlider(
-        values: RangeValues(selectedMinPrice, selectedMaxPrice),
-        min: minPrice,
-        max: maxPrice,
-        divisions: 20,
-        onChanged: (values) {
-          setState(() {
-            selectedMinPrice = values.start;
-            selectedMaxPrice = values.end;
-          });
-          _filterTours();
-        },
-      ),
-    ],
-  );
+    );
+  }
 
-  Widget _buildRatingSlider() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Минимальный рейтинг: ${selectedMinRating.toStringAsFixed(1)} ★'),
-      Slider(
-        min: 0,
-        max: 5,
-        divisions: 10,
-        value: selectedMinRating,
-        label: selectedMinRating.toStringAsFixed(1),
-        onChanged: (value) {
-          setState(() => selectedMinRating = value);
-          _filterTours();
-        },
-      ),
-    ],
-  );
+  Widget _buildDestinationDropdown() {
+    if (destinations.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-  List<Widget> _buildTourCards() =>
-      filteredTours.isEmpty
-          ? [const Center(child: Text('Нет туров по заданным параметрам'))]
-          : filteredTours
-              .map(
-                (tour) => Card(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: ListTile(
-                    leading: const Icon(
-                      Icons.travel_explore,
-                      color: Colors.blue,
+    return DropdownButtonFormField<String>(
+      value:
+          destinations.contains(selectedDestination)
+              ? selectedDestination
+              : null,
+      decoration: InputDecoration(
+        labelText: 'Куда',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      items:
+          destinations
+              .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+              .toList(),
+      onChanged: (value) {
+        setState(() => selectedDestination = value);
+        _filterTours();
+      },
+    );
+  }
+
+  Widget _buildDateField() {
+    return TextFormField(
+      readOnly: true,
+      controller: _dateController,
+      onTap: _pickDateRange,
+      decoration: InputDecoration(
+        labelText: 'Дата вылета',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        suffixIcon: const Icon(Icons.calendar_today),
+      ),
+    );
+  }
+
+  Widget _buildNightsDropdown() {
+    return DropdownButtonFormField<int>(
+      value: selectedNights,
+      decoration: InputDecoration(
+        labelText: 'Ночей',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      items:
+          List.generate(
+            20,
+            (i) => i + 1,
+          ).map((n) => DropdownMenuItem(value: n, child: Text('$n'))).toList(),
+      onChanged: (value) {
+        setState(() => selectedNights = value);
+        _filterTours();
+      },
+    );
+  }
+
+  Widget _buildTouristsDropdown() {
+    return DropdownButtonFormField<int>(
+      value: selectedTourists,
+      decoration: InputDecoration(
+        labelText: 'Туристы',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      items:
+          List.generate(
+            6,
+            (i) => i + 1,
+          ).map((n) => DropdownMenuItem(value: n, child: Text('$n'))).toList(),
+      onChanged: (value) => setState(() => selectedTourists = value ?? 2),
+    );
+  }
+
+  List<Widget> _buildTourCards() {
+    if (filteredTours.isEmpty) {
+      return [const Center(child: Text('Нет туров по заданным параметрам'))];
+    }
+
+    return filteredTours.map((tour) {
+      final totalPrice = tour.basePrice * selectedTourists;
+
+      return Card(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => TourDetailScreen(
+                      tour: tour,
+                      touristsCount: selectedTourists, // <-- передаём сюда
                     ),
-                    title: Text(tour.destination),
-                    subtitle: Text(
-                      '${tour.price} ₽\nРейтинг: ${tour.rating.toStringAsFixed(1)} ★',
+              ),
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Image.network(
+                tour.imageUrl,
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+                errorBuilder:
+                    (context, error, stackTrace) => Container(
+                      width: double.infinity,
+                      height: 200,
+                      color: Colors.grey[300],
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.broken_image, size: 40),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => TourDetailsScreen(tour: tour),
-                        ),
-                      );
-                    },
-                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tour.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('$totalPrice ₽ • ${tour.hotelStars}★ отель'),
+                    Text('Питание: ${tour.hotelMeals}'),
+                    Text(
+                      'Рейтинг отеля: ${tour.hotelRating.toStringAsFixed(1)} ★',
+                    ),
+                    Text(
+                      '${tour.flightAirline} (${tour.flightFrom} → ${tour.flightTo})',
+                    ),
+                    Text(
+                      'Ночей: от ${tour.minNights} до ${tour.maxNights}',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
                 ),
-              )
-              .toList();
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
 }
