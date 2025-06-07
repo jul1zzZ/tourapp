@@ -12,10 +12,10 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final user = FirebaseAuth.instance.currentUser;
-  Map<String, dynamic>? userInfo;
+  late final TabController _tabController;
+  final User? user = FirebaseAuth.instance.currentUser;
 
+  Map<String, dynamic>? userInfo;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> tourBookings = [];
   Map<String, int> favoriteToursCount = {};
   List<String> topTourTitles = [];
@@ -56,10 +56,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           reviewsSnap.docs.map((doc) => doc['tourId'] as String).toSet();
 
       final Map<String, int> counts = {};
-      for (var doc in bookingsSnap.docs) {
-        final tourTitle = doc['tourTitle'];
-        if (tourTitle is String && tourTitle.isNotEmpty) {
-          counts[tourTitle] = (counts[tourTitle] ?? 0) + 1;
+      for (final doc in bookingsSnap.docs) {
+        final title = doc['tourTitle'];
+        if (title is String && title.isNotEmpty) {
+          counts[title] = (counts[title] ?? 0) + 1;
         }
       }
 
@@ -91,119 +91,123 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   void _showReviewDialog(String tourId, String tourTitle) {
-    final TextEditingController controller = TextEditingController();
+    final controller = TextEditingController();
     int rating = 5;
 
     showDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: Text('Отзыв о "$tourTitle"'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(hintText: 'Введите отзыв'),
-                    maxLines: 4,
-                  ),
-                  SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(5, (index) {
-                      final starIndex = index + 1;
-                      return IconButton(
-                        icon: Icon(
-                          Icons.star,
-                          color:
-                              rating >= starIndex ? Colors.orange : Colors.grey,
-                          size: 32,
-                        ),
-                        onPressed: () {
-                          setStateDialog(() {
-                            rating = starIndex;
-                          });
-                        },
-                      );
-                    }),
-                  ),
-                  Text('Оценка: $rating звёзд'),
-                ],
+      builder:
+          (context) => AlertDialog(
+            title: Text('Отзыв о "$tourTitle"'),
+            content: StatefulBuilder(
+              builder: (context, setStateDialog) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: controller,
+                      maxLines: 4,
+                      decoration: InputDecoration(hintText: 'Введите отзыв'),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (index) {
+                        final star = index + 1;
+                        return IconButton(
+                          icon: Icon(
+                            Icons.star,
+                            color: rating >= star ? Colors.amber : Colors.grey,
+                          ),
+                          onPressed: () => setStateDialog(() => rating = star),
+                        );
+                      }),
+                    ),
+                    Text('Оценка: $rating звёзд'),
+                  ],
+                );
+              },
+            ),
+            actions: [
+              TextButton(
+                child: const Text('Отмена'),
+                onPressed: () => Navigator.pop(context),
               ),
-              actions: [
-                TextButton(
-                  child: Text('Отмена'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                TextButton(
-                  child: Text('Отправить'),
-                  onPressed: () async {
-                    final reviewText = controller.text.trim();
-                    if (reviewText.isNotEmpty) {
-                      await FirebaseFirestore.instance
-                          .collection('Reviews')
-                          .add({
-                            'tourId': tourId,
-                            'tourTitle': tourTitle,
-                            'email': user!.email,
-                            'reviewText': reviewText,
-                            'rating': rating,
-                            'createdAt': Timestamp.now(),
-                          });
+              FilledButton(
+                child: const Text('Отправить'),
+                onPressed: () async {
+                  final reviewText = controller.text.trim();
+                  if (reviewText.isEmpty) return;
 
-                      setState(() {
-                        reviewedTourIds.add(tourId);
-                      });
+                  await FirebaseFirestore.instance.collection('Reviews').add({
+                    'tourId': tourId,
+                    'tourTitle': tourTitle,
+                    'email': user!.email,
+                    'reviewText': reviewText,
+                    'rating': rating,
+                    'createdAt': Timestamp.now(),
+                  });
 
-                      Navigator.pop(context);
-                    }
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
+                  setState(() {
+                    reviewedTourIds.add(tourId);
+                  });
+
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
     );
   }
 
   Widget _infoTile(String label, String? value) {
-    return ListTile(title: Text(label), subtitle: Text(value ?? '-'));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: 4),
+        Text(value ?? '-', style: Theme.of(context).textTheme.bodyLarge),
+        const SizedBox(height: 12),
+      ],
+    );
   }
 
   Widget _buildUserInfo() {
     if (userInfo == null) {
-      return Center(child: Text('Не удалось загрузить данные пользователя'));
+      return const Center(
+        child: Text('Не удалось загрузить данные пользователя'),
+      );
     }
 
-    return ListView(
-      padding: EdgeInsets.all(16),
-      children: [
-        CircleAvatar(radius: 40, child: Icon(Icons.person, size: 40)),
-        SizedBox(height: 12),
-        Center(
-          child: Text(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          const CircleAvatar(radius: 40, child: Icon(Icons.person, size: 40)),
+          const SizedBox(height: 16),
+          Text(
             userInfo!['name'] ?? 'Имя отсутствует',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
-        ),
-        SizedBox(height: 16),
-        _infoTile('Email', userInfo!['email']),
-        _infoTile('Телефон', userInfo!['phone']),
-        _infoTile('Язык', userInfo!['language']),
-        _infoTile('Последний вход', _formatTimestamp(userInfo!['lastLogin'])),
-      ],
+          const SizedBox(height: 24),
+          _infoTile('Email', userInfo!['email']),
+          _infoTile('Телефон', userInfo!['phone']),
+          _infoTile('Язык', userInfo!['language']),
+          _infoTile('Последний вход', _formatTimestamp(userInfo!['lastLogin'])),
+        ],
+      ),
     );
   }
 
   Widget _buildTourBookings() {
     if (tourBookings.isEmpty) {
-      return Center(child: Text('У вас пока нет бронирований.'));
+      return const Center(child: Text('У вас пока нет бронирований.'));
     }
 
     return ListView.builder(
+      padding: const EdgeInsets.all(16),
       itemCount: tourBookings.length,
       itemBuilder: (context, index) {
         final booking = tourBookings[index].data();
@@ -212,25 +216,25 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         final alreadyReviewed = reviewedTourIds.contains(tourId);
 
         return Card(
-          margin: EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 16),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   tourTitle ?? 'Название отсутствует',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                SizedBox(height: 6),
-                Text(
-                  'Дата бронирования: ${_formatTimestamp(booking['bookingDate'])}',
-                ),
-                Text('Количество туристов: ${booking['touristsCount'] ?? '-'}'),
-                Text('Общая сумма: ${booking['totalPrice'] ?? '-'} ₽'),
+                const SizedBox(height: 8),
+                Text('Дата: ${_formatTimestamp(booking['bookingDate'])}'),
+                Text('Туристов: ${booking['touristsCount'] ?? '-'}'),
+                Text('Сумма: ${booking['totalPrice'] ?? '-'} ₽'),
                 Text('Статус: ${booking['status'] ?? 'Ожидает'}'),
-                SizedBox(height: 8),
-                ElevatedButton(
+                const SizedBox(height: 12),
+                OutlinedButton(
                   onPressed:
                       alreadyReviewed
                           ? null
@@ -249,7 +253,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
   Widget _buildFavoriteTours() {
     if (topTourTitles.isEmpty) {
-      return Center(child: Text('Нет популярных туров'));
+      return const Center(child: Text('Нет популярных туров'));
     }
 
     return FutureBuilder<QuerySnapshot>(
@@ -259,33 +263,36 @@ class _UserProfileScreenState extends State<UserProfileScreen>
               .where('title', whereIn: topTourTitles)
               .get(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting)
-          return Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
-          return Center(child: Text('Не удалось загрузить туры'));
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('Не удалось загрузить туры'));
+        }
 
         final tours = snapshot.data!.docs;
 
         return ListView.builder(
+          padding: const EdgeInsets.all(16),
           itemCount: tours.length,
           itemBuilder: (context, index) {
             final tour = tours[index].data() as Map<String, dynamic>;
+
             return Card(
-              margin: EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       tour['title'] ?? 'Название отсутствует',
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Text('Город: ${tour['city'] ?? '-'}'),
                     Text('Страна: ${tour['country'] ?? '-'}'),
                     Text('Цена: ${tour['basePrice'] ?? '-'} ₽'),
@@ -312,19 +319,19 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Профиль пользователя'),
+        title: const Text('Профиль пользователя'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: [
+          tabs: const [
             Tab(icon: Icon(Icons.person), text: 'Инфо'),
-            Tab(icon: Icon(Icons.flight), text: 'Бронирования'),
+            Tab(icon: Icon(Icons.history), text: 'Бронирования'),
             Tab(icon: Icon(Icons.star), text: 'Популярное'),
           ],
         ),
       ),
       body:
           isLoading
-              ? Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator())
               : TabBarView(
                 controller: _tabController,
                 children: [
