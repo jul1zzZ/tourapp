@@ -5,14 +5,18 @@ import 'package:intl/intl.dart';
 class BookingListScreen extends StatelessWidget {
   final bookingsRef = FirebaseFirestore.instance.collection('Bookings');
 
+  BookingListScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Все бронирования')),
       body: StreamBuilder<QuerySnapshot>(
-        stream: bookingsRef.orderBy('timestamp', descending: true).snapshots(),
+        stream:
+            bookingsRef.orderBy('bookingDate', descending: true).snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData)
+            return Center(child: CircularProgressIndicator());
 
           final bookings = snapshot.data!.docs;
 
@@ -31,65 +35,69 @@ class BookingListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBookingCard(BuildContext context, String bookingId, Map<String, dynamic> data) {
-    final userId = data['userId'];
-    final tourId = data['tourId'] ?? 'Без названия';
-    final timestamp = data['date'] as Timestamp?;
-    final date = timestamp != null ? DateFormat('yyyy-MM-dd').format(timestamp.toDate()) : 'Неизвестно';
-    final people = data['numberOfPeople'] ?? 0;
-    final total = data['totalPrice'] ?? 0.0;
+  Widget _buildBookingCard(
+    BuildContext context,
+    String bookingId,
+    Map<String, dynamic> data,
+  ) {
+    final tourTitle = data['tourTitle'] ?? 'Без названия';
+    final bookingTimestamp = data['bookingDate'] as Timestamp?;
+    final date =
+        bookingTimestamp != null
+            ? DateFormat('dd.MM.yyyy').format(bookingTimestamp.toDate())
+            : 'Неизвестно';
+
+    final name = data['name'] ?? 'Без имени';
+    final email = data['email'] ?? 'Нет email';
+    final phone = data['phone'] ?? 'Не указан';
+    final touristsCount = data['touristsCount'] ?? 0;
+    final totalPrice = data['totalPrice'] ?? 0;
     final status = data['status'] ?? 'Ожидает';
-    final payment = data['paymentMethod'] ?? 'Не указано';
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
-      builder: (context, userSnapshot) {
-        String userInfo = 'Загрузка...';
-        if (userSnapshot.hasData && userSnapshot.data!.exists) {
-          final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-          userInfo = '${userData['name'] ?? 'Без имени'} (${userData['email'] ?? 'нет почты'})';
-        }
-
-        return Card(
-          margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          elevation: 3,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Тур: $tourId', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                SizedBox(height: 4),
-                Text('Пользователь: $userInfo'),
-                Text('Дата: $date'),
-                Text('Количество человек: $people'),
-                Text('Сумма: \$${total.toStringAsFixed(2)}'),
-                Text('Метод оплаты: $payment'),
-                Text(
-                  'Статус: $status',
-                  style: TextStyle(
-                    color: _statusColor(status),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: PopupMenuButton<String>(
-                    onSelected: (value) => _updateStatus(bookingId, value),
-                    itemBuilder: (context) => [
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Тур: $tourTitle',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            SizedBox(height: 4),
+            Text('Имя: $name'),
+            Text('Email: $email'),
+            Text('Телефон: $phone'),
+            Text('Дата бронирования: $date'),
+            Text('Количество туристов: $touristsCount'),
+            Text('Сумма: ${totalPrice.toString()} ₽'),
+            SizedBox(height: 6),
+            Text(
+              'Статус: $status',
+              style: TextStyle(
+                color: _statusColor(status),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: PopupMenuButton<String>(
+                onSelected: (value) => _updateStatus(bookingId, value),
+                itemBuilder:
+                    (context) => [
                       PopupMenuItem(value: 'Ожидает', child: Text('Ожидает')),
                       PopupMenuItem(value: 'Оплачено', child: Text('Оплачено')),
                       PopupMenuItem(value: 'Отменено', child: Text('Отменено')),
                     ],
-                    icon: Icon(Icons.more_vert),
-                  ),
-                ),
-              ],
+                icon: Icon(Icons.more_vert),
+              ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 
@@ -105,8 +113,9 @@ class BookingListScreen extends StatelessWidget {
   }
 
   Future<void> _updateStatus(String bookingId, String newStatus) async {
-    await FirebaseFirestore.instance.collection('Bookings').doc(bookingId).update({
-      'status': newStatus,
-    });
+    await FirebaseFirestore.instance
+        .collection('Bookings')
+        .doc(bookingId)
+        .update({'status': newStatus});
   }
 }

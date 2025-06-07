@@ -25,9 +25,8 @@ class _BottomNavbarState extends State<BottomNavbar> {
     final isWideScreen = MediaQuery.of(context).size.width >= 600;
 
     final userPages = [
-       SearchToursScreen(),
-       HotelBookingScreen(),
-       UserProfileScreen(),
+      SearchToursScreen(),
+      UserProfileScreen(),
       ChatScreen(currentUserId: userId),
     ];
 
@@ -36,11 +35,6 @@ class _BottomNavbarState extends State<BottomNavbar> {
         icon: Icon(Icons.search),
         selectedIcon: Icon(Icons.search_outlined),
         label: 'Поиск',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.hotel),
-        selectedIcon: Icon(Icons.hotel_outlined),
-        label: 'Отели',
       ),
       NavigationDestination(
         icon: Icon(Icons.person),
@@ -54,10 +48,7 @@ class _BottomNavbarState extends State<BottomNavbar> {
       ),
     ];
 
-    final adminPages = [
-       AdminDashboardScreen(),
-       AdminChatsListScreen(),
-    ];
+    final adminPages = [AdminDashboardScreen(), AdminChatsListScreen()];
 
     final adminDestinations = const [
       NavigationDestination(
@@ -87,30 +78,34 @@ class _BottomNavbarState extends State<BottomNavbar> {
                 });
               },
               labelType: NavigationRailLabelType.all,
-              destinations: destinations
-                  .map((d) => NavigationRailDestination(
-                        icon: d.icon,
-                        selectedIcon: d.selectedIcon,
-                        label: Text(d.label),
-                      ))
-                  .toList(),
+              destinations:
+                  destinations
+                      .map(
+                        (d) => NavigationRailDestination(
+                          icon: d.icon,
+                          selectedIcon: d.selectedIcon,
+                          label: Text(d.label),
+                        ),
+                      )
+                      .toList(),
             ),
           Expanded(child: pages[_selectedIndex]),
         ],
       ),
-      bottomNavigationBar: isWideScreen
-          ? null
-          : NavigationBar(
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (index) {
-                setState(() {
-                  _selectedIndex = index;
-                });
-              },
-              animationDuration: const Duration(milliseconds: 400),
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              destinations: destinations,
-            ),
+      bottomNavigationBar:
+          isWideScreen
+              ? null
+              : NavigationBar(
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: (index) {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                },
+                animationDuration: const Duration(milliseconds: 400),
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                destinations: destinations,
+              ),
     );
   }
 }

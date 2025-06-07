@@ -67,7 +67,6 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
                   DateTime.now().subtract(const Duration(days: 1)),
                 );
 
-            // Фильтрация по ночам с учетом minNights и maxNights
             final matchesNights =
                 selectedNights == null ||
                 (tour.minNights <= selectedNights! &&
@@ -84,6 +83,23 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
       context: context,
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).colorScheme.primary,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null) {
@@ -98,7 +114,8 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -116,35 +133,69 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildInputFields(),
-          const SizedBox(height: 12),
-          ElevatedButton(onPressed: _filterTours, child: const Text('Поиск')),
-          const Divider(height: 32),
-          Text('Найдено: ${filteredTours.length} туров'),
-          const SizedBox(height: 12),
-          ..._buildTourCards(),
-        ],
-      ),
-    );
-  }
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Ищите идеальный тур',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
 
-  Widget _buildInputFields() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildTextField('Откуда', _departureController, enabled: false),
-        const SizedBox(height: 12),
-        _buildDestinationDropdown(),
-        const SizedBox(height: 12),
-        _buildDateField(),
-        const SizedBox(height: 12),
-        _buildNightsDropdown(),
-        const SizedBox(height: 12),
-        _buildTouristsDropdown(),
-      ],
+              _buildTextField('Откуда', _departureController, enabled: false),
+
+              const SizedBox(height: 16),
+
+              _buildDestinationDropdown(),
+
+              const SizedBox(height: 16),
+
+              _buildDateField(),
+
+              const SizedBox(height: 16),
+
+              _buildNightsDropdown(),
+
+              const SizedBox(height: 16),
+
+              _buildTouristsDropdown(),
+
+              const SizedBox(height: 24),
+
+              FilledButton.icon(
+                icon: const Icon(Icons.search),
+                label: const Text('Поиск'),
+                onPressed: _filterTours,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  backgroundColor: colorScheme.primary,
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              Text(
+                'Найдено туров: ${filteredTours.length}',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 16),
+
+              ..._buildTourCards(),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -153,12 +204,15 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
     TextEditingController controller, {
     bool enabled = true,
   }) {
-    return TextFormField(
+    return TextField(
       controller: controller,
       enabled: enabled,
       decoration: InputDecoration(
         labelText: label,
+        prefixIcon: enabled ? null : const Icon(Icons.flight_takeoff),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        filled: true,
+        fillColor: enabled ? null : Colors.grey.shade200,
       ),
     );
   }
@@ -176,6 +230,7 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
       decoration: InputDecoration(
         labelText: 'Куда',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        filled: true,
       ),
       items:
           destinations
@@ -189,14 +244,15 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
   }
 
   Widget _buildDateField() {
-    return TextFormField(
+    return TextField(
       readOnly: true,
       controller: _dateController,
       onTap: _pickDateRange,
       decoration: InputDecoration(
         labelText: 'Дата вылета',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
         suffixIcon: const Icon(Icons.calendar_today),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        filled: true,
       ),
     );
   }
@@ -207,6 +263,7 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
       decoration: InputDecoration(
         labelText: 'Ночей',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        filled: true,
       ),
       items:
           List.generate(
@@ -226,6 +283,7 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
       decoration: InputDecoration(
         labelText: 'Туристы',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        filled: true,
       ),
       items:
           List.generate(
@@ -238,7 +296,17 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
 
   List<Widget> _buildTourCards() {
     if (filteredTours.isEmpty) {
-      return [const Center(child: Text('Нет туров по заданным параметрам'))];
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Center(
+            child: Text(
+              'Нет туров по заданным параметрам',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+        ),
+      ];
     }
 
     return filteredTours.map((tour) {
@@ -256,7 +324,7 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
                 builder:
                     (context) => TourDetailScreen(
                       tour: tour,
-                      touristsCount: selectedTourists, // <-- передаём сюда
+                      touristsCount: selectedTourists,
                     ),
               ),
             );
@@ -291,10 +359,10 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text('$totalPrice ₽ • ${tour.hotelStars}★ отель'),
-                    Text('Питание: ${tour.hotelMeals}'),
+                    Text('$totalPrice ₽ • ${tour.hotel.stars}★ отель'),
+                    Text('Питание: ${tour.hotel.meals}'),
                     Text(
-                      'Рейтинг отеля: ${tour.hotelRating.toStringAsFixed(1)} ★',
+                      'Рейтинг отеля: ${tour.hotel.rating.toStringAsFixed(1)} ★',
                     ),
                     Text(
                       '${tour.flightAirline} (${tour.flightFrom} → ${tour.flightTo})',
@@ -303,6 +371,8 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
                       'Ночей: от ${tour.minNights} до ${tour.maxNights}',
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
+                    const SizedBox(height: 8),
+                    TourRatingWidget(tourId: tour.id),
                   ],
                 ),
               ),
@@ -311,5 +381,64 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
         ),
       );
     }).toList();
+  }
+}
+
+class TourRatingWidget extends StatelessWidget {
+  final String tourId;
+
+  const TourRatingWidget({required this.tourId, super.key});
+
+  Future<double> _fetchAverageRating() async {
+    final querySnapshot =
+        await FirebaseFirestore.instance
+            .collection('Reviews')
+            .where('tourId', isEqualTo: tourId)
+            .get();
+
+    if (querySnapshot.docs.isEmpty) return 0;
+
+    final ratings =
+        querySnapshot.docs
+            .map((doc) => (doc.data()['rating'] ?? 0) as int)
+            .toList();
+
+    final average = ratings.reduce((a, b) => a + b) / ratings.length;
+    return average;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<double>(
+      future: _fetchAverageRating(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Row(
+            children: const [
+              Icon(Icons.star, color: Colors.grey, size: 16),
+              SizedBox(width: 4),
+              Text('Загрузка...'),
+            ],
+          );
+        }
+        if (snapshot.hasError) {
+          return const Text('Ошибка загрузки рейтинга');
+        }
+
+        final averageRating = snapshot.data ?? 0;
+
+        if (averageRating == 0) {
+          return const Text('Рейтинг отсутствует');
+        }
+
+        return Row(
+          children: [
+            const Icon(Icons.star, color: Colors.orange, size: 16),
+            const SizedBox(width: 4),
+            Text('${averageRating.toStringAsFixed(1)} ★'),
+          ],
+        );
+      },
+    );
   }
 }

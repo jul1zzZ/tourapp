@@ -34,6 +34,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    addLocationsToHotels(); // вызов функции обновления данных
     _initFirebaseMessaging();
   }
 
@@ -86,6 +87,38 @@ class _MyAppState extends State<MyApp> {
       });
     } else {
       print('Пользователь отказался от уведомлений');
+    }
+  }
+
+  final Map<String, Map<String, double>> cityCoordinates = {
+    'Афины': {'lat': 37.9715, 'lng': 23.7267},
+    'Барселона': {'lat': 41.3851, 'lng': 2.1734},
+    'Прага': {'lat': 50.0755, 'lng': 14.4378},
+    'Стамбул': {'lat': 41.0082, 'lng': 28.9784},
+    'Бангкок': {'lat': 13.7563, 'lng': 100.5018},
+    'Токио': {'lat': 35.6762, 'lng': 139.6503},
+    'Париж': {'lat': 48.8566, 'lng': 2.3522},
+    'Дубай': {'lat': 25.2048, 'lng': 55.2708},
+    'Рим': {'lat': 41.9028, 'lng': 12.4964},
+    'Каир': {'lat': 30.0444, 'lng': 31.2357},
+  };
+
+  Future<void> addLocationsToHotels() async {
+    final collection = FirebaseFirestore.instance.collection('tours');
+    final snapshot = await collection.get();
+
+    for (final doc in snapshot.docs) {
+      final city = doc.get('city');
+      final coords = cityCoordinates[city];
+
+      if (coords != null) {
+        await doc.reference.update({
+          'hotel.location': {'lat': coords['lat'], 'lng': coords['lng']},
+        });
+        print('Updated document ${doc.id} with location for $city');
+      } else {
+        print('No coordinates found for city: $city (doc id: ${doc.id})');
+      }
     }
   }
 

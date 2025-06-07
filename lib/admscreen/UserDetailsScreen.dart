@@ -4,14 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class UserDetailsScreen extends StatelessWidget {
   final String userId;
 
-  UserDetailsScreen({required this.userId});
+  const UserDetailsScreen({super.key, required this.userId});
 
   @override
   Widget build(BuildContext context) {
     final userRef = FirebaseFirestore.instance.collection('users').doc(userId);
-    final bookingsRef = FirebaseFirestore.instance
-        .collection('Bookings')
-        .where('userId', isEqualTo: userId);
 
     return Scaffold(
       appBar: AppBar(title: Text('Детали пользователя')),
@@ -30,23 +27,33 @@ class UserDetailsScreen extends StatelessWidget {
             return Center(child: Text('Пользователь не найден'));
           }
 
-          final userData = userSnapshot.data!.data() as Map<String, dynamic>? ?? {};
-
+          final userData =
+              userSnapshot.data!.data() as Map<String, dynamic>? ?? {};
           final name = userData['name'] ?? 'Без имени';
           final email = userData['email'] ?? 'Без email';
+
+          // 🔄 Заменили фильтрацию на поиск по email
+          final bookingsRef = FirebaseFirestore.instance
+              .collection('Bookings')
+              .where('email', isEqualTo: email);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Card(
                 margin: EdgeInsets.all(16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor: Colors.blue,
                     child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?'),
                   ),
-                  title: Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(
+                    name,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text(email),
                 ),
               ),
@@ -61,12 +68,15 @@ class UserDetailsScreen extends StatelessWidget {
                 child: StreamBuilder<QuerySnapshot>(
                   stream: bookingsRef.snapshots(),
                   builder: (context, bookingSnapshot) {
-                    if (bookingSnapshot.connectionState == ConnectionState.waiting) {
+                    if (bookingSnapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return Center(child: CircularProgressIndicator());
                     }
 
                     if (bookingSnapshot.hasError) {
-                      return Center(child: Text('Ошибка загрузки бронирований'));
+                      return Center(
+                        child: Text('Ошибка загрузки бронирований'),
+                      );
                     }
 
                     final bookings = bookingSnapshot.data?.docs ?? [];
@@ -76,35 +86,43 @@ class UserDetailsScreen extends StatelessWidget {
                     }
 
                     return ListView.builder(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       itemCount: bookings.length,
                       itemBuilder: (context, index) {
                         final booking = bookings[index];
-                        final data = booking.data() as Map<String, dynamic>? ?? {};
+                        final data =
+                            booking.data() as Map<String, dynamic>? ?? {};
 
-                        final tourId = data['tourId'] ?? 'Без названия';
-                        final timestamp = data['date'];
+                        final tourTitle = data['tourTitle'] ?? 'Без названия';
+                        final touristsCount = data['touristsCount'] ?? 0;
+                        final totalPrice = data['totalPrice'] ?? 0;
+                        final phone = data['phone'] ?? 'Не указан';
+
                         String formattedDate = 'Не указана';
-
+                        final timestamp = data['bookingDate'];
                         if (timestamp is Timestamp) {
                           final date = timestamp.toDate();
                           formattedDate =
                               '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
                         }
 
-                        final status = data['status'] ?? 'Ожидает';
-
                         return Card(
+                          margin: EdgeInsets.symmetric(vertical: 6),
                           child: ListTile(
-                            title: Text('Тур: $tourId'),
+                            leading: Icon(Icons.tour),
+                            title: Text('Тур: $tourTitle'),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Дата: $formattedDate'),
-                                Text('Статус: $status'),
+                                Text('Дата брони: $formattedDate'),
+                                Text('Телефон: $phone'),
+                                Text('Туристов: $touristsCount'),
+                                Text('Сумма: ${totalPrice.toString()} ₽'),
                               ],
                             ),
-                            leading: Icon(Icons.tour),
                           ),
                         );
                       },
