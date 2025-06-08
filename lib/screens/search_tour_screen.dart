@@ -258,6 +258,12 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
   }
 
   Widget _buildNightsDropdown() {
+    List<int> nightOptions = List.generate(20, (i) => i + 1);
+    if (selectedNights != null && !nightOptions.contains(selectedNights)) {
+      nightOptions.add(selectedNights!);
+      nightOptions.sort();
+    }
+
     return DropdownButtonFormField<int>(
       value: selectedNights,
       decoration: InputDecoration(
@@ -266,10 +272,9 @@ class _SearchToursScreenState extends State<SearchToursScreen> {
         filled: true,
       ),
       items:
-          List.generate(
-            20,
-            (i) => i + 1,
-          ).map((n) => DropdownMenuItem(value: n, child: Text('$n'))).toList(),
+          nightOptions
+              .map((n) => DropdownMenuItem(value: n, child: Text('$n')))
+              .toList(),
       onChanged: (value) {
         setState(() => selectedNights = value);
         _filterTours();

@@ -6,7 +6,7 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 class BookingScreen extends StatefulWidget {
   final Tour tour;
   final int touristsCount;
-  final String userEmail; // добавляем
+  final String userEmail;
 
   const BookingScreen({
     super.key,
@@ -54,7 +54,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
     try {
       await FirebaseFirestore.instance.collection('Bookings').add({
-        'tourId': widget.tour.id, // убедись, что id есть в модели
+        'tourId': widget.tour.id,
         'tourTitle': widget.tour.title,
         'touristsCount': widget.touristsCount,
         'name': _nameController.text,
@@ -153,7 +153,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      enabled: false, // запрещаем редактирование, если нужно
+                      enabled: false,
                       decoration: const InputDecoration(
                         labelText: 'Email',
                         border: OutlineInputBorder(),

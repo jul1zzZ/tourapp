@@ -5,7 +5,11 @@ class AdminChatScreen extends StatefulWidget {
   final String chatId;
   final String adminId;
 
-  AdminChatScreen({required this.chatId, required this.adminId});
+  const AdminChatScreen({
+    super.key,
+    required this.chatId,
+    required this.adminId,
+  });
 
   @override
   State<AdminChatScreen> createState() => _AdminChatScreenState();
@@ -15,21 +19,47 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  late final DocumentReference chatRef;
+  late final CollectionReference messagesRef;
+
+  @override
+  void initState() {
+    super.initState();
+    chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
+    messagesRef = chatRef.collection('messages');
+
+    _markMessagesAsRead(); // <- прочтение непрочитанных клиентских сообщений
+  }
+
+  Future<void> _markMessagesAsRead() async {
+    final unreadMessages =
+        await messagesRef
+            .where('senderId', isNotEqualTo: widget.adminId)
+            .where('isRead', isEqualTo: false)
+            .get();
+
+    for (var doc in unreadMessages.docs) {
+      await doc.reference.update({'isRead': true});
+    }
+
+    await chatRef.update({'adminReplied': false});
+  }
+
   void _sendMessage() async {
     final message = _controller.text.trim();
     if (message.isEmpty) return;
 
-    final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
-
-    await chatRef.collection('messages').add({
+    await messagesRef.add({
       'senderId': widget.adminId,
       'message': message,
       'sentAt': FieldValue.serverTimestamp(),
+      'isRead': true, // админские сообщения всегда прочитаны
     });
 
     await chatRef.update({
       'lastMessage': message,
       'lastMessageTime': FieldValue.serverTimestamp(),
+      'adminReplied': true, // админ ответил
     });
 
     _controller.clear();
@@ -48,11 +78,7 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final messagesRef = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.chatId)
-        .collection('messages')
-        .orderBy('sentAt', descending: true);
+    final messagesStream = messagesRef.orderBy('sentAt', descending: true);
 
     return Scaffold(
       appBar: AppBar(title: Text('Чат с пользователем')),
@@ -60,9 +86,10 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
         children: [
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: messagesRef.snapshots(),
+              stream: messagesStream.snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData)
+                  return Center(child: CircularProgressIndicator());
 
                 final messages = snapshot.data!.docs;
 
@@ -72,25 +99,46 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
                   itemCount: messages.length,
                   padding: EdgeInsets.symmetric(vertical: 10),
                   itemBuilder: (context, index) {
-                    final data = messages[index].data()! as Map<String, dynamic>;
+                    final data =
+                        messages[index].data()! as Map<String, dynamic>;
                     final isAdmin = data['senderId'] == widget.adminId;
 
                     return Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       child: Align(
-                        alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+                        alignment:
+                            isAdmin
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
                         child: AnimatedContainer(
                           duration: Duration(milliseconds: 250),
-                          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
-                            color: isAdmin
-                                ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
-                                : Theme.of(context).colorScheme.surfaceVariant,
+                            color:
+                                isAdmin
+                                    ? Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.2)
+                                    : Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.only(
                               topLeft: Radius.circular(16),
                               topRight: Radius.circular(16),
-                              bottomLeft: isAdmin ? Radius.circular(16) : Radius.circular(0),
-                              bottomRight: isAdmin ? Radius.circular(0) : Radius.circular(16),
+                              bottomLeft:
+                                  isAdmin
+                                      ? Radius.circular(16)
+                                      : Radius.circular(0),
+                              bottomRight:
+                                  isAdmin
+                                      ? Radius.circular(0)
+                                      : Radius.circular(16),
                             ),
                           ),
                           child: Text(
@@ -120,8 +168,12 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor: Theme.of(context).colorScheme.surfaceVariant,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      fillColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
@@ -137,7 +189,7 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );

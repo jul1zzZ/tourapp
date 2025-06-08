@@ -208,8 +208,7 @@ class _TourEditScreenState extends State<TourEditScreen> {
                           mapController: _mapController,
                           options: MapOptions(
                             initialCenter:
-                                _hotelLocation ??
-                                LatLng(41.3851, 2.1734), // Барселона
+                                _hotelLocation ?? LatLng(41.3851, 2.1734),
                             initialZoom: 13.0,
                             onTap: (tapPosition, point) {
                               setState(() {

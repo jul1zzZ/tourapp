@@ -1,5 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
@@ -7,139 +7,123 @@ class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.currentUserId});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  _ChatScreenState createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final TextEditingController _controller = TextEditingController();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  late String chatId;
-  bool _isLoading = true;
+  final _ctrl = TextEditingController();
+  late final DocumentReference chatDoc;
+  late final CollectionReference msgsRef;
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    chatDoc = FirebaseFirestore.instance
+        .collection('chats')
+        .doc('support_chat_${widget.currentUserId}');
+    msgsRef = chatDoc.collection('messages');
     _initChat();
   }
 
   Future<void> _initChat() async {
-    chatId = 'support_chat_${widget.currentUserId}';
-    final chatRef = _firestore.collection('chats').doc(chatId);
-    final doc = await chatRef.get();
-
+    final doc = await chatDoc.get();
     if (!doc.exists) {
-      await chatRef.set({
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.currentUserId)
+              .get();
+      final userName = userDoc.data()?['name'] ?? 'Пользователь';
+      await chatDoc.set({
         'userId': widget.currentUserId,
+        'userName': userName,
         'createdAt': FieldValue.serverTimestamp(),
         'lastMessage': '',
         'lastMessageTime': FieldValue.serverTimestamp(),
         'participants': ['support', widget.currentUserId],
+        'adminReplied': true,
       });
     }
-
-    setState(() {
-      _isLoading = false;
-    });
+    await _markRead();
+    setState(() => isLoading = false);
   }
 
-  void _sendMessage() async {
-    final message = _controller.text.trim();
-    if (message.isEmpty) return;
+  Future<void> _markRead() async {
+    final unread =
+        await msgsRef
+            .where('senderId', isNotEqualTo: widget.currentUserId)
+            .where('isRead', isEqualTo: false)
+            .get();
+    for (var d in unread.docs) {
+      await d.reference.update({'isRead': true});
+    }
+    await chatDoc.update({'adminReplied': true});
+  }
 
-    final chatRef = _firestore.collection('chats').doc(chatId);
+  void _send() async {
+    final txt = _ctrl.text.trim();
+    if (txt.isEmpty) return;
 
-    await chatRef.collection('messages').add({
+    _ctrl.clear();
+    await msgsRef.add({
       'senderId': widget.currentUserId,
-      'message': message,
+      'message': txt,
       'sentAt': FieldValue.serverTimestamp(),
+      'isRead': false,
     });
-
-    await chatRef.update({
-      'lastMessage': message,
+    await chatDoc.update({
+      'lastMessage': txt,
       'lastMessageTime': FieldValue.serverTimestamp(),
+      'adminReplied': false,
     });
-
-    _controller.clear();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    if (_isLoading) {
+  Widget build(BuildContext ctx) {
+    if (isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Чат с поддержкой')),
-        body: const Center(child: CircularProgressIndicator()),
+        appBar: AppBar(title: Text('Чат с поддержкой')),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    final messagesRef = _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .orderBy('sentAt', descending: true);
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Чат с поддержкой'),
-        backgroundColor: colorScheme.primaryContainer,
-        foregroundColor: colorScheme.onPrimaryContainer,
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: Text('Чат с поддержкой')),
       body: Column(
         children: [
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: messagesRef.snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final messages = snapshot.data!.docs;
-
-                if (messages.isEmpty) {
-                  return const Center(
-                    child: Text('Нет сообщений. Напишите нам!'),
-                  );
-                }
-
+              stream: msgsRef.orderBy('sentAt', descending: true).snapshots(),
+              builder: (c, snap) {
+                if (!snap.hasData)
+                  return Center(child: CircularProgressIndicator());
+                final msgs = snap.data!.docs;
                 return ListView.builder(
                   reverse: true,
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final data = messages[index].data()! as Map<String, dynamic>;
-                    final isMe = data['senderId'] == widget.currentUserId;
-                    final messageText = data['message'] ?? '';
-
+                  padding: EdgeInsets.all(12),
+                  itemCount: msgs.length,
+                  itemBuilder: (_, i) {
+                    final d = msgs[i];
+                    final m = d.data()! as Map<String, dynamic>;
+                    final isMe = m['senderId'] == widget.currentUserId;
                     return Align(
-                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      alignment:
+                          isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        margin: EdgeInsets.symmetric(vertical: 6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: isMe
-                              ? colorScheme.primaryContainer
-                              : colorScheme.surfaceVariant,
+                          color:
+                              isMe
+                                  ? Colors.blueAccent.withOpacity(0.2)
+                                  : Colors.grey.shade200,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
                         ),
-                        child: Text(
-                          messageText,
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: isMe
-                                ? colorScheme.onPrimaryContainer
-                                : colorScheme.onSurfaceVariant,
-                          ),
-                        ),
+                        child: Text(m['message'] ?? ''),
                       ),
                     );
                   },
@@ -147,35 +131,25 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          const Divider(height: 1),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            color: colorScheme.surface,
+          Padding(
+            padding: EdgeInsets.all(8),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _controller,
+                    controller: _ctrl,
                     decoration: InputDecoration(
-                      filled: true,
-                      fillColor: colorScheme.surfaceVariant,
-                      hintText: 'Введите сообщение...',
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
+                      hintText: 'Ваше сообщение…',
+                      border: OutlineInputBorder(),
+                      isDense: true,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _sendMessage,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.all(16),
-                    shape: const CircleBorder(),
-                  ),
-                  child: const Icon(Icons.send),
+                SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.send),
+                  color: Theme.of(ctx).colorScheme.primary,
+                  onPressed: _send,
                 ),
               ],
             ),
